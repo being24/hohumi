@@ -22,4 +22,4 @@ RUN set -x && \
     rm -rf /var/cache/apk/*  && \
     echo "Hello, ${BOT_NAME} ready!" 
 
-CMD ["/opt/${BOT_NAME}/bot.sh"]
+CMD ["/opt/hofumi/bot.sh"]
