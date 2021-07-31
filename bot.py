@@ -31,7 +31,7 @@ class MyBot(commands.Bot):
         print(self.user.id)
         print('------')
         logging.warning('rebooted')
-        await bot.change_presence(activity=discord.Game(name='plane bot'))
+        await bot.change_presence(activity=discord.Game(name='Thread管理中'))
 
 
 if __name__ == '__main__':
