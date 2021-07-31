@@ -7,7 +7,6 @@ import time
 from datetime import datetime
 
 import discord
-import discosnow as ds
 import tzlocal
 from discord.ext import commands, tasks
 
@@ -124,8 +123,7 @@ class Admin(commands.Cog, name='管理用コマンド群'):
                 if len(message.attachments) != 0:
                     attachments_name = ' '.join(
                         [i.filename for i in message.attachments])
-                    msg_time = ds.snowflake2time(
-                        message.id).strftime('%m-%d %H:%M')
+                    msg_time = message.created_at.strftime('%m-%d %H:%M')
                     await ctx.send(f'{msg_time}の{attachments_name}を取り込みます')
                     for attachment in message.attachments:
                         await attachment.save(f"{self.master_path}/data/{attachment.filename}")
