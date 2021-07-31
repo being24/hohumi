@@ -1,4 +1,4 @@
-# plane_discord_bot
+# hohumi
 
-discord.pyを用いたdicordbotの素体です。基本的に自分が使うことを想定しています。
-
+Thread機能の管理を行うためのbotです
+Threadの維持や管理を行います

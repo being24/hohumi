@@ -1,6 +1,6 @@
 FROM python:3.8-alpine
 
-ARG BOT_NAME="plane_discord_bot"
+ARG BOT_NAME="hofumi"
 
 WORKDIR /opt/
 
