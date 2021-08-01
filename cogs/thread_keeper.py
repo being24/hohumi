@@ -86,6 +86,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         return archive_time
 
     @commands.command(name='maintenance_this_thread', aliases=['m_channel'])
+    @commands.has_permissions(ban_members=True)
     async def maintenance_this_thread(self, ctx, tf: bool = True):
         if not isinstance(ctx.channel, discord.Thread):
             msg = await ctx.reply("このコマンドはスレッドチャンネル専用です")
@@ -117,6 +118,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
                 await self.c.autodel_msg(mgs)
 
     @commands.command(name='full_maintenance', aliases=['m_guild'])
+    @commands.has_permissions(ban_members=True)
     async def full_maintenance(self, ctx, tf: bool = True):
         if isinstance(ctx.channel, discord.DMChannel):
             msg = await ctx.reply("このコマンドはサーバーチャンネル専用です")
@@ -136,6 +138,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     @commands.command(name='resister_notify',
                       aliases=['add_notify'],
                       description='スレッドに自動参加する役職を登録するコマンド')
+    @commands.has_permissions(ban_members=True)
     async def resister_notify(self, ctx, *bot_role: discord.Role):
         """スレッド作成時に自動参加するbot_roleを設定するコマンド"""
 
@@ -148,11 +151,13 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
 
     @commands.command(name="remove_notify",
                       description="スレッドに自動参加する役職を全削除するコマンド")
+    @commands.has_permissions(ban_members=True)
     async def remove_notify(self, ctx):
         await self.notify_role.delete_notify(ctx.guild.id)
         await ctx.reply(f'{ctx.guild}の新規作成スレッドには今後自動参加しません', mention_author=False)
 
     @commands.command(name="status_thread")
+    @commands.has_permissions(ban_members=True)
     async def status_thread(self, ctx):
         """スレッドの状態を確認するコマンド"""
         guild_setting = await self.guild_setting_mng.get_guild_setting(ctx.guild.id)
