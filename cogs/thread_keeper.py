@@ -196,6 +196,12 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         # OPとbotを呼ぶ処理
         await self.call_of_thread(thread)
 
+
+        # DBの設定を確認、管理対象としてDBに入れる
+        if await self.guild_setting_mng.is_full_maintainance(thread.guild.id):
+            archive_time = self.return_estimated_archive_time(thread)
+            await self.channel_data_manager.resister_channel(channel_id=thread.id, guild_id=thread.guild.id, archive_time=archive_time)
+        
         # 低速モードを引き継ぎ
         if thread.parent is not None:
             try:
@@ -208,10 +214,6 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
                 print("権限不足")
                 print(thread)
 
-        # DBの設定を確認、管理対象としてDBに入れる
-        if await self.guild_setting_mng.is_full_maintainance(thread.guild.id):
-            archive_time = self.return_estimated_archive_time(thread)
-            await self.channel_data_manager.resister_channel(channel_id=thread.id, guild_id=thread.guild.id, archive_time=archive_time)
 
     @commands.Cog.listener()
     async def on_thread_update(self, before: discord.Thread, after: discord.Thread):
