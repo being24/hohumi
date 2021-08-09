@@ -1,6 +1,7 @@
 # !/usr/bin/env python3
 
 import asyncio
+import logging
 from datetime import datetime, timedelta
 
 import discord
@@ -10,7 +11,7 @@ from discord.ext import commands, tasks
 from .utils.common import CommonUtil
 from .utils.guild_setting import GuildSettingManager
 from .utils.notify_role import NotifySettingManager
-from .utils.thread_channels import ChannelDataManager
+from .utils.thread_channels import ChannelData, ChannelDataManager
 
 
 class Hofumi(commands.Cog, name='Thread管理用cog'):
@@ -85,6 +86,10 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         archive_time = thread.archive_timestamp + \
             timedelta(minutes=thread.auto_archive_duration)
         return archive_time
+
+    def log_unfounded_thread(self, channel: ChannelData) -> None:
+        error_content = f'error content: unfounded_thread\nmessage_content: {channel.channel_id}\nguild : {channel.guild_id}\n{channel.archive_time}'
+        logging.error(error_content, exc_info=True)
 
     @commands.command(name='maintenance_this_thread', aliases=['m_channel'])
     @commands.has_permissions(ban_members=True)
@@ -196,12 +201,11 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         # OPとbotを呼ぶ処理
         await self.call_of_thread(thread)
 
-
         # DBの設定を確認、管理対象としてDBに入れる
         if await self.guild_setting_mng.is_full_maintainance(thread.guild.id):
             archive_time = self.return_estimated_archive_time(thread)
             await self.channel_data_manager.resister_channel(channel_id=thread.id, guild_id=thread.guild.id, archive_time=archive_time)
-        
+
         # 低速モードを引き継ぎ
         if thread.parent is not None:
             try:
@@ -213,7 +217,6 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             except discord.Forbidden:
                 print("権限不足")
                 print(thread)
-
 
     @commands.Cog.listener()
     async def on_thread_update(self, before: discord.Thread, after: discord.Thread):
@@ -227,10 +230,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
 
         # アーカイブされたらkeepをfalseに、解除されたらkeepをtrueにする
         if after.archived != before.archived:
-            if after.archived:
-                await self.channel_data_manager.set_maintenance_channel(channel_id=after.id, guild_id=after.guild.id, tf=False)
-            else:
-                await self.channel_data_manager.set_maintenance_channel(channel_id=after.id, guild_id=after.guild.id, tf=True)
+            await self.channel_data_manager.set_maintenance_channel(channel_id=after.id, guild_id=after.guild.id, tf=not after.archived)
 
     # 削除されたらDBから削除する
     @commands.Cog.listener()
@@ -238,7 +238,14 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         if await self.channel_data_manager.is_exists(channel_id=thread.id, guild_id=thread.guild.id):
             await self.channel_data_manager.delete_channel(channel_id=thread.id, guild_id=thread.guild.id)
 
-    @tasks.loop(seconds=5.0)
+    # スレッドにcloseって投稿されたらアーカイブする
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if isinstance(message.channel, discord.Thread):
+            if message.clean_content == 'close':
+                await message.channel.edit(archived=True)
+
+    @tasks.loop(minutes=5.0)
     async def watch_dog(self):
         # 期限短いやつを延長する
         about_to_expire = await self.channel_data_manager.get_about_to_expire_channel()
@@ -248,7 +255,11 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             for channel in about_to_expire:
                 guild = self.bot.get_guild(channel.guild_id)
                 thread = guild.get_thread(channel.channel_id)
-                await self.extend_archive_duration(thread)
+                if thread is None:
+                    self.log_unfounded_thread(channel)
+                    await self.channel_data_manager.set_maintenance_channel(channel_id=channel.channel_id, guild_id=channel.guild_id, tf=False)
+                else:
+                    await self.extend_archive_duration(thread)
 
                 await asyncio.sleep(1)
 

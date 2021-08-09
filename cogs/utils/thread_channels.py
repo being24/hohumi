@@ -226,7 +226,7 @@ class ChannelDataManager():
 
         Returns:
             Optional[List[ChannelData]]: チャンネル情報のリスト
-        """        
+        """
         async with AsyncSession(engine) as session:
             async with session.begin():
                 stmt = select([ChannelDataDB]).where(
@@ -239,10 +239,24 @@ class ChannelDataManager():
                 else:
                     return result
 
+    async def get_channel_data(self, channel_id: int, guild_id: int) -> Optional[ChannelData]:
+        async with AsyncSession(engine) as session:
+            async with session.begin():
+                stmt = select([ChannelDataDB]).where(
+                    ChannelDataDB.channel_id == channel_id).where(
+                    ChannelDataDB.guild_id == guild_id)
+                result = await session.execute(stmt)
+                result = result.fetchone()
+                result = self.return_dataclass(result)
+                if result is None:
+                    return None
+                else:
+                    return result
+
 
 if __name__ == "__main__":
     setting_mng = ChannelDataManager()
     result = asyncio.run(
-        setting_mng.get_about_to_expire_channel())
+        setting_mng.is_maintenance_channel(channel_id=871010016000348171, guild_id=609058923353341973))
 
     print((result))
