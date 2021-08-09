@@ -162,10 +162,10 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         await self.notify_role.delete_notify(ctx.guild.id)
         await ctx.reply(f'{ctx.guild}の新規作成スレッドには今後自動参加しません', mention_author=False)
 
-    @commands.command(name="status_thread")
+    @commands.command(name="keep_status_of_guild")
     @commands.has_permissions(ban_members=True)
-    async def status_thread(self, ctx):
-        """スレッドの状態を確認するコマンド"""
+    async def keep_status_of_guild(self, ctx):
+        """サーバーのスレッドの設定を確認するコマンド"""
         guild_setting = await self.guild_setting_mng.get_guild_setting(ctx.guild.id)
         if guild_setting is None:
             msg = await ctx.reply("サーバー設定がありません")
@@ -191,6 +191,16 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             role_mentions = [role.mention for role in roles]
             role_mentions = ','.join(role_mentions)
             await ctx.reply(f"自動参加するroleは{role_mentions}です", allowed_mentions=discord.AllowedMentions.none())
+
+    @commands.command()
+    @commands.has_permissions(ban_members=True)
+    async def thread_status(self, ctx):
+        """スレッドの設定を確認するコマンド"""
+        result = await self.channel_data_manager.is_maintenance_channel(channel_id=ctx.channel.id, guild_id=ctx.guild.id)
+        if result:
+            await ctx.reply(f"{ctx.channel.name}は管理対象です")
+        else:
+            await ctx.reply(f"{ctx.channel.name}は管理対象外です")
 
     @commands.Cog.listener()
     async def on_thread_join(self, thread: discord.Thread):
