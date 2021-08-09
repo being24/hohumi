@@ -238,7 +238,12 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         if await self.channel_data_manager.is_exists(channel_id=thread.id, guild_id=thread.guild.id):
             await self.channel_data_manager.delete_channel(channel_id=thread.id, guild_id=thread.guild.id)
 
-    @tasks.loop(seconds=5.0)
+    # スレッドにcloseって投稿されたらアーカイブする
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if isinstance(message.channel, discord.Thread):
+            if message.clean_content == 'close':
+                await message.channel.edit(archived=True)
 
     @tasks.loop(minutes=5.0)
     async def watch_dog(self):
