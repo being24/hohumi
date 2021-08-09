@@ -226,7 +226,7 @@ class ChannelDataManager():
 
         Returns:
             Optional[List[ChannelData]]: チャンネル情報のリスト
-        """        
+        """
         async with AsyncSession(engine) as session:
             async with session.begin():
                 stmt = select([ChannelDataDB]).where(
@@ -235,6 +235,20 @@ class ChannelDataManager():
                 result = result.fetchall()
                 result = [self.return_dataclass(row) for row in result]
                 if len(result) == 0:
+                    return None
+                else:
+                    return result
+
+    async def get_channel_data(self, channel_id: int, guild_id: int) -> Optional[ChannelData]:
+        async with AsyncSession(engine) as session:
+            async with session.begin():
+                stmt = select([ChannelDataDB]).where(
+                    ChannelDataDB.channel_id == channel_id).where(
+                    ChannelDataDB.guild_id == guild_id)
+                result = await session.execute(stmt)
+                result = result.fetchone()
+                result = self.return_dataclass(result)
+                if result is None:
                     return None
                 else:
                     return result
