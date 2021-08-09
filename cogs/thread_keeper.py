@@ -230,10 +230,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
 
         # アーカイブされたらkeepをfalseに、解除されたらkeepをtrueにする
         if after.archived != before.archived:
-            if after.archived:
-                await self.channel_data_manager.set_maintenance_channel(channel_id=after.id, guild_id=after.guild.id, tf=False)
-            else:
-                await self.channel_data_manager.set_maintenance_channel(channel_id=after.id, guild_id=after.guild.id, tf=True)
+            await self.channel_data_manager.set_maintenance_channel(channel_id=after.id, guild_id=after.guild.id, tf=not after.archived)
 
     # 削除されたらDBから削除する
     @commands.Cog.listener()

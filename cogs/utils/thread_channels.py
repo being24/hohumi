@@ -257,6 +257,6 @@ class ChannelDataManager():
 if __name__ == "__main__":
     setting_mng = ChannelDataManager()
     result = asyncio.run(
-        setting_mng.get_about_to_expire_channel())
+        setting_mng.is_maintenance_channel(channel_id=871010016000348171, guild_id=609058923353341973))
 
     print((result))
