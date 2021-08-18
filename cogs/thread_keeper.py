@@ -99,6 +99,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             await self.c.autodel_msg(msg)
             return
         await ctx.channel.edit(locked=True)
+        ctx.reply(f"{ctx.channel}をロックしました")
 
     @commands.command(name='maintenance_this_thread', aliases=['m_channel'])
     @commands.has_permissions(ban_members=True)
