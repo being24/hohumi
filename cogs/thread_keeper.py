@@ -91,6 +91,15 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         error_content = f'error content: unfounded_thread\nmessage_content: {channel.channel_id}\nguild : {channel.guild_id}\n{channel.archive_time}'
         logging.error(error_content, exc_info=True)
 
+    @commands.command()
+    @commands.has_permissions(ban_members=True)
+    async def lock_thread(self, ctx):
+        if not isinstance(ctx.channel, discord.Thread):
+            msg = await ctx.reply("このコマンドはスレッドチャンネル専用です")
+            await self.c.autodel_msg(msg)
+            return
+        await ctx.channel.edit(locked=True)
+
     @commands.command(name='maintenance_this_thread', aliases=['m_channel'])
     @commands.has_permissions(ban_members=True)
     async def maintenance_this_thread(self, ctx, tf: bool = True):
@@ -252,7 +261,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if isinstance(message.channel, discord.Thread):
-            if message.clean_content == 'close':
+            if message.clean_content.lower() == 'close':
                 await message.channel.edit(archived=True)
 
     @tasks.loop(minutes=5.0)
