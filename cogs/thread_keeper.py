@@ -99,7 +99,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             await self.c.autodel_msg(msg)
             return
         try:
-            await ctx.channel.edit(locked=True)
+            await ctx.channel.edit(archived=True, locked=True)
         except discord.Forbidden:
             await ctx.send("スレッドをロックできませんでした")
         await ctx.reply(f"{ctx.channel}をロックしました")
