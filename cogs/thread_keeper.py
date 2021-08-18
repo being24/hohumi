@@ -98,8 +98,24 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             msg = await ctx.reply("このコマンドはスレッドチャンネル専用です")
             await self.c.autodel_msg(msg)
             return
-        await ctx.channel.edit(locked=True)
-        ctx.reply(f"{ctx.channel}をロックしました")
+        try:
+            await ctx.channel.edit(locked=True)
+        except discord.Forbidden:
+            await ctx.send("スレッドをロックできませんでした")
+        await ctx.reply(f"{ctx.channel}をロックしました")
+
+    @commands.command()
+    @commands.has_permissions(ban_members=True)
+    async def unlock_thread(self, ctx):
+        if not isinstance(ctx.channel, discord.Thread):
+            msg = await ctx.reply("このコマンドはスレッドチャンネル専用です")
+            await self.c.autodel_msg(msg)
+            return
+        try:
+            await ctx.channel.edit(locked=False)
+        except discord.Forbidden:
+            await ctx.send("スレッドをアンロックできませんでした")
+        await ctx.reply(f"{ctx.channel}をアンロックしました")
 
     @commands.command(name='maintenance_this_thread', aliases=['m_channel'])
     @commands.has_permissions(ban_members=True)
