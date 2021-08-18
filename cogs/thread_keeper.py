@@ -98,11 +98,12 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             msg = await ctx.reply("このコマンドはスレッドチャンネル専用です")
             await self.c.autodel_msg(msg)
             return
+
+        await ctx.reply(f"{ctx.channel}をロックします")
         try:
             await ctx.channel.edit(archived=True, locked=True)
         except discord.Forbidden:
             await ctx.send("スレッドをロックできませんでした")
-        await ctx.reply(f"{ctx.channel}をロックしました")
 
     @commands.command()
     @commands.has_permissions(ban_members=True)
@@ -258,17 +259,20 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     async def on_thread_update(self, before: discord.Thread, after: discord.Thread):
         # 監視対象であるか？
         if await self.channel_data_manager.is_maintenance_channel(channel_id=after.id, guild_id=after.guild.id):
+            if after.locked != before.locked:
+                await self.channel_data_manager.set_maintenance_channel(channel_id=after.id, guild_id=after.guild.id, tf=not after.archived)
+
+            # アーカイブされたらkeepをfalseに、解除されたらkeepをtrueにする
+            if after.archived != before.archived:
+                await self.channel_data_manager.set_maintenance_channel(channel_id=after.id, guild_id=after.guild.id, tf=not after.archived)
             # アーカイブ時間の設定変更時にDBも書き換える
             if after.archive_timestamp != before.archive_timestamp:
                 self.return_estimated_archive_time(after)
                 archive_time = self.return_estimated_archive_time(after)
                 await self.channel_data_manager.update_archived_time(channel_id=after.id, guild_id=after.guild.id, archive_time=archive_time)
 
-        # アーカイブされたらkeepをfalseに、解除されたらkeepをtrueにする
-        if after.archived != before.archived:
-            await self.channel_data_manager.set_maintenance_channel(channel_id=after.id, guild_id=after.guild.id, tf=not after.archived)
-
     # 削除されたらDBから削除する
+
     @commands.Cog.listener()
     async def on_thread_delete(self, thread: discord.Thread):
         if await self.channel_data_manager.is_exists(channel_id=thread.id, guild_id=thread.guild.id):
