@@ -274,9 +274,14 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         if before.name != after.name:
             await after.send(f"このチャンネル名が変更されました。\n{before.name}→{after.name}")
 
-    # 削除されたらDBから削除する
+        if before.archived != after.archived:
+            if after.parent is None:
+                return
+            await after.parent.send(f"{after.mention}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。")
+
     @commands.Cog.listener()
     async def on_thread_delete(self, thread: discord.Thread):
+        # 削除されたらDBから削除する
         if await self.channel_data_manager.is_exists(channel_id=thread.id, guild_id=thread.guild.id):
             await self.channel_data_manager.delete_channel(channel_id=thread.id, guild_id=thread.guild.id)
 
