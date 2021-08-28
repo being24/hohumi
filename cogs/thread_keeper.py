@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import discord
 import tzlocal
 from discord.ext import commands, tasks
+from discord.ext.commands.context import Context
 
 from .utils.common import CommonUtil
 from .utils.guild_setting import GuildSettingManager
@@ -20,7 +21,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     """
 
     def __init__(self, bot):
-        self.bot = bot
+        self.bot: commands.Bot = bot
         self.c = CommonUtil()
 
         self.guild_setting_mng = GuildSettingManager()
@@ -93,7 +94,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
 
     @commands.command()
     @commands.has_permissions(ban_members=True)
-    async def lock_thread(self, ctx):
+    async def lock_thread(self, ctx: Context):
         if not isinstance(ctx.channel, discord.Thread):
             msg = await ctx.reply("このコマンドはスレッドチャンネル専用です")
             await self.c.autodel_msg(msg)
@@ -277,6 +278,8 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         if before.archived != after.archived:
             if after.parent is None:
                 return
+            if after.locked is False:
+                await after.edit(archived=True, locked=True)
             await after.parent.send(f"{after.mention}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。")
 
     @commands.Cog.listener()
