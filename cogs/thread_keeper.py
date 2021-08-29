@@ -280,7 +280,19 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             if after.parent is None:
                 return
             # アーカイブ通知を送る
-            await after.parent.send(f"{after.mention}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。")
+            log = None
+            try:
+                logs = await after.guild.audit_logs(limit=1).flatten()
+                log = logs[0]
+            except discord.Forbidden:
+                pass
+
+            if log is None:
+                message = f"{after.mention}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
+            else:
+                message = f"{log.user}によって{after.mention}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
+
+            await after.parent.send(message)
 
             # アーカイブされた
             if before.archived is False:

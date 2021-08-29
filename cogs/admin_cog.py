@@ -37,11 +37,11 @@ class Admin(commands.Cog, name='管理用コマンド群'):
         """
         embed = discord.Embed(
             title="サーバーに参加しました",
-            description=f"plane-bot {self.bot.user.display_name}",
+            description=f"スレッド保守bot {self.bot.user.display_name}",
             color=0x2fe48d)
         embed.set_author(
             name=f"{self.bot.user.name}",
-            icon_url=f"{self.bot.user.avatar_url}")
+            icon_url=f"{self.bot.user.avatar.replace(format='png').url}")
         await guild.system_channel.send(embed=embed)
 
     @commands.command(aliases=['re'], hidden=True)
