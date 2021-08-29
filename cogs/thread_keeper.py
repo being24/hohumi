@@ -275,10 +275,17 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         if before.name != after.name:
             await after.send(f"このチャンネル名が変更されました。\n{before.name}→{after.name}")
 
-        # アーカイブ状態に変化があった
+        if after.parent is None:
+            return
+
+        # ロックされたとき
+        if before.locked != after.locked:
+            message = f"{after.name}は{'ロック' if after.locked else 'ロックが解除'}されました。"
+            await after.parent.send(message)
+            return
+
+            # アーカイブ状態に変化があった
         if before.archived != after.archived:
-            if after.parent is None:
-                return
             # アーカイブ通知を送る
             log = None
             try:
@@ -287,10 +294,14 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             except discord.Forbidden:
                 pass
 
+            if log is not None:
+                if (log.created_at - discord.utils.utcnow()) < timedelta(minutes=5):
+                    log = None
+
             if log is None:
-                message = f"{after.mention}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
+                message = f"{after.name}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
             else:
-                message = f"{log.user}によって{after.mention}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
+                message = f"{log.user}によって{after.name}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
 
             await after.parent.send(message)
 
