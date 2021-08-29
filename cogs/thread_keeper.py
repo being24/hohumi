@@ -295,7 +295,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
                 pass
 
             if log is not None:
-                if (log.created_at - discord.utils.utcnow()) < timedelta(minutes=5):
+                if (log.created_at - discord.utils.utcnow()) > timedelta(minutes=5):
                     log = None
 
             if log is None:
@@ -303,7 +303,8 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             else:
                 message = f"{log.user}によって{after.name}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
 
-            await after.parent.send(message)
+            if log is None or log.user.id != self.bot.user.id:
+                await after.parent.send(message)
 
             # アーカイブされた
             if before.archived is False:
