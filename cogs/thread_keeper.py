@@ -275,12 +275,20 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         if before.name != after.name:
             await after.send(f"このチャンネル名が変更されました。\n{before.name}→{after.name}")
 
+        # アーカイブ状態に変化があった
         if before.archived != after.archived:
             if after.parent is None:
                 return
-            if after.locked is False:
-                await after.edit(archived=True, locked=True)
+            # アーカイブ通知を送る
             await after.parent.send(f"{after.mention}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。")
+
+            # アーカイブされた
+            if before.archived is False:
+                # ロックされていない
+                if after.locked is False:
+                    # ロックする
+                    await after.edit(archived=False)
+                    await after.edit(archived=True, locked=True)
 
     @commands.Cog.listener()
     async def on_thread_delete(self, thread: discord.Thread):
