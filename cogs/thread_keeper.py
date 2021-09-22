@@ -305,7 +305,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             if log is None:
                 message = f"{after.name}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
             else:
-                message = f"{log.user}によって{after.name}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。{discord.utils.utcnow() - log.created_at}"
+                message = f"{log.user}によって{after.name}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
 
             if log is None or log.user.id != self.bot.user.id:
                 await after.parent.send(message)
