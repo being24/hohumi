@@ -92,6 +92,10 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         error_content = f'error content: unfounded_thread\nmessage_content: {channel.channel_id}\nguild : {channel.guild_id}\n{channel.archive_time}'
         logging.error(error_content, exc_info=True)
 
+    def log_error(self, error) -> None:
+        error_content = f'error content: {error}\n'
+        logging.error(error_content, exc_info=True)
+
     @commands.command()
     @commands.has_permissions(ban_members=True)
     async def lock_thread(self, ctx: Context):
@@ -349,6 +353,11 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     async def before_printer(self):
         print('thread waiting...')
         await self.bot.wait_until_ready()
+
+    @watch_dog.error
+    async def watch_dog_error(self, error):
+        self.log_error(error)
+        return
 
 
 def setup(bot):
