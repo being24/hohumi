@@ -194,7 +194,7 @@ class ChannelDataManager():
                     ChannelDataDB.guild_id == guild_id)
                 await session.execute(stmt)
 
-    async def get_about_to_expire_channel(self, deltas: int = 2) -> Optional[List[ChannelData]]:
+    async def get_about_to_expire_channel(self, deltas: int = 4) -> Optional[List[ChannelData]]:
         """指定された時間以内に自動アーカイブされるチャンネルを取得する関数
 
         Args:

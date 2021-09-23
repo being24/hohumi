@@ -357,6 +357,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     @watch_dog.error
     async def watch_dog_error(self, error):
         self.log_error(error)
+        print(error)
         return
 
 
