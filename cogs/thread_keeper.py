@@ -51,9 +51,6 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             channel (discord.Thread): 対象のスレッド
         """
 
-        if thread.archived:
-            return
-
         if thread.auto_archive_duration != 1440:  # 60想定
             await thread.edit(auto_archive_duration=1440)
             await asyncio.sleep(10)
