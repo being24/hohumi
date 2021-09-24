@@ -322,6 +322,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     async def on_thread_delete(self, thread: discord.Thread):
         # 削除されたらDBから削除する
         if await self.channel_data_manager.is_exists(channel_id=thread.id, guild_id=thread.guild.id):
+            print(f'{thread.name}の情報を削除しました')
             await self.channel_data_manager.delete_channel(channel_id=thread.id, guild_id=thread.guild.id)
 
     # スレッドにcloseって投稿されたらアーカイブする
