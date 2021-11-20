@@ -61,6 +61,7 @@ if __name__ == '__main__':
     intents = discord.Intents.default()
     intents.members = True
     intents.typing = False
+    intents.integrations = True
 
     bot = MyBot(command_prefix=commands.when_mentioned_or('/'))
 

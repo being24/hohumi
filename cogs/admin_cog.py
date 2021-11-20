@@ -6,6 +6,7 @@ from datetime import datetime
 
 import discord
 import tzlocal
+from discord.commands import slash_command
 from discord.ext import commands, tasks
 
 from .utils.common import CommonUtil
@@ -82,6 +83,7 @@ class Admin(commands.Cog, name='管理用コマンド群'):
         start_time = time.time()
         mes = await ctx.reply("Pinging....")
         await mes.edit(content="pong!\n" + str(round(time.time() - start_time, 3) * 1000) + "ms")
+
 
     @commands.command(aliases=['wh'], hidden=True)
     async def where(self, ctx):

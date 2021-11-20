@@ -17,6 +17,9 @@ class CommonUtil():
             msg (discord.Message): 削除するメッセージオブジェクト
             second (int, optional): 秒数. Defaults to 5.
         """
+        if isinstance(msg, discord.Interaction):
+            msg = await msg.original_message()
+
         try:
             await msg.delete(delay=second)
         except discord.Forbidden:
@@ -30,11 +33,11 @@ class CommonUtil():
         """メンバーか役職オブジェクトを返す関数
 
         Args:
-            guild (discord.guild): discordのguildオブジェクト
+            guild (discord.guild): nextcordのguildオブジェクト
             id (int): 役職かメンバーのID
 
         Returns:
-            typing.Union[discord.Member, discord.Role]: discord.Memberかdiscord.Role
+            typing.Union[discord.Member, discord.Role]: discord.Memberかnextcord.Role
         """
         user_or_role = guild.get_role(id)
         if user_or_role is None:
