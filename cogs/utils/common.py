@@ -17,6 +17,9 @@ class CommonUtil():
             msg (discord.Message): 削除するメッセージオブジェクト
             second (int, optional): 秒数. Defaults to 5.
         """
+        if isinstance(msg, discord.Interaction):
+            msg = await msg.original_message()
+
         try:
             await msg.delete(delay=second)
         except discord.Forbidden:
