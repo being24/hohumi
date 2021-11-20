@@ -4,9 +4,9 @@ import os
 import time
 from datetime import datetime
 
-import discord
+import nextcord
 import tzlocal
-from discord.ext import commands, tasks
+from nextcord.ext import commands, tasks
 
 from .utils.common import CommonUtil
 
@@ -35,7 +35,7 @@ class Admin(commands.Cog, name='管理用コマンド群'):
     async def on_guild_join(self, guild):
         """on_guild_join時に発火する関数
         """
-        embed = discord.Embed(
+        embed = nextcord.Embed(
             title="サーバーに参加しました",
             description=f"スレッド保守bot {self.bot.user.display_name}",
             color=0x2fe48d)
@@ -71,7 +71,7 @@ class Admin(commands.Cog, name='管理用コマンド群'):
     @commands.command(aliases=['st'], hidden=True)
     async def status(self, ctx, word: str):
         try:
-            await self.bot.change_presence(activity=discord.Game(name=word))
+            await self.bot.change_presence(activity=nextcord.Game(name=word))
             await ctx.reply(f"ステータスを{word}に変更しました", mention_author=False)
         except BaseException:
             pass
@@ -100,7 +100,7 @@ class Admin(commands.Cog, name='管理用コマンド群'):
             filename for filename in os.listdir(self.master_path + "/data")
             if filename.endswith(".sqlite")]
 
-        my_files = [discord.File(f'{self.master_path}/data/{i}')
+        my_files = [nextcord.File(f'{self.master_path}/data/{i}')
                     for i in SQLite_files]
 
         await ctx.send(files=my_files)
@@ -147,7 +147,7 @@ class Admin(commands.Cog, name='管理用コマンド群'):
 
             # json_files.extend(sql_files)
             my_files = [
-                discord.File(f'{self.master_path}/data/{i}')for i in sql_files]
+                nextcord.File(f'{self.master_path}/data/{i}')for i in sql_files]
 
             await channel.send(files=my_files)
 

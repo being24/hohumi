@@ -2,8 +2,8 @@ import sys
 import traceback
 import logging
 
-from discord.ext import commands
-import discord
+from nextcord.ext import commands
+import nextcord
 
 
 class CommandErrorHandler(commands.Cog):
@@ -11,16 +11,16 @@ class CommandErrorHandler(commands.Cog):
         self.bot = bot
 
     @staticmethod
-    async def autodel_msg(msg: discord.Message, second: int = 5):
+    async def autodel_msg(msg: nextcord.Message, second: int = 5):
         """渡されたメッセージを指定秒数後に削除する関数
 
         Args:
-            msg (discord.Message): 削除するメッセージオブジェクト
+            msg (nextcord.Message): 削除するメッセージオブジェクト
             second (int, optional): 秒数. Defaults to 5.
         """
         try:
             await msg.delete(delay=second)
-        except discord.Forbidden:
+        except nextcord.Forbidden:
             pass
 
     @commands.Cog.listener()
@@ -47,7 +47,7 @@ class CommandErrorHandler(commands.Cog):
         elif isinstance(error, commands.NoPrivateMessage):
             try:
                 return await ctx.reply(f'{ctx.command} can not be used in Private Messages.')
-            except discord.HTTPException:
+            except nextcord.HTTPException:
                 print("couldn't send direct message")
 
         elif isinstance(error, commands.BadArgument):

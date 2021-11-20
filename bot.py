@@ -5,8 +5,8 @@ import logging
 import os
 import traceback
 
-import discord
-from discord.ext import commands
+import nextcord
+from nextcord.ext import commands
 from discord_sentry_reporting import use_sentry
 from dotenv import load_dotenv
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
@@ -31,7 +31,7 @@ class MyBot(commands.Bot):
         print(self.user.id)
         print('------')
         logging.warning('rebooted')
-        await bot.change_presence(activity=discord.Game(name='Thread管理中'))
+        await bot.change_presence(activity=nextcord.Game(name='Thread管理中'))
 
 
 if __name__ == '__main__':
@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
     currentpath = os.path.dirname(os.path.abspath(__file__))
 
-    intents = discord.Intents.default()
+    intents = nextcord.Intents.default()
     intents.members = True
     intents.typing = False
 
