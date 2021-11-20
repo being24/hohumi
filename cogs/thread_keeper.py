@@ -4,9 +4,8 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
-import nextcord
-from nextcord.ext import commands, tasks
-from nextcord.ext.commands.context import Context
+import discord
+from discord.ext import commands, tasks
 
 from .utils.common import CommonUtil
 from .utils.guild_setting import GuildSettingManager
@@ -41,11 +40,11 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         self.watch_dog.stop()
         self.watch_dog.start()
 
-    async def extend_archive_duration(self, thread: nextcord.Thread):
+    async def extend_archive_duration(self, thread: discord.Thread):
         """チャンネルのArchive時間を拡大する関数
 
         Args:
-            channel (nextcord.Thread): 対象のスレッド
+            channel (discord.Thread): 対象のスレッド
         """
 
         if thread.auto_archive_duration != 1440:  # 60想定
@@ -56,7 +55,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         await asyncio.sleep(10)
         await thread.edit(auto_archive_duration=1440)
 
-    async def call_of_thread(self, thread: nextcord.Thread) -> None:
+    async def call_of_thread(self, thread: discord.Thread) -> None:
         role_ids = await self.notify_role.return_notified(thread.guild.id)
         if role_ids is None:
             return
@@ -72,11 +71,11 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         await msg.edit(content=f'{content} {msg.content}')
 
     def return_estimated_archive_time(
-            self, thread: nextcord.Thread) -> datetime:
+            self, thread: discord.Thread) -> datetime:
         """スレッドのArchive時間を返す関数
 
         Args:
-            thread (nextcord.Thread): スレッド
+            thread (discord.Thread): スレッド
 
         Returns:
             datetime: 推測されるArchive時間
@@ -155,8 +154,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     @commands.command(name='full_maintenance', aliases=['m_guild'])
     @commands.has_permissions(ban_members=True)
     async def full_maintenance(self, ctx, tf: bool = True):
-        if isinstance(ctx.channel, nextcord.DMChannel):
-            msg = await ctx.reply("このコマンドはサーバーチャンネル専用です")
+        if isinstance(ctx.channel, discord.DMChannel):
             await self.c.autodel_msg(msg)
             return
 
@@ -232,7 +230,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             await ctx.reply(f"{ctx.channel.name}は管理対象外です")
 
     @commands.Cog.listener()
-    async def on_thread_join(self, thread: nextcord.Thread):
+    async def on_thread_join(self, thread: discord.Thread):
         if not thread.me:
             await thread.join()
             return
@@ -253,12 +251,12 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
                 await thread.edit(slowmode_delay=thread.parent.slowmode_delay)
                 msg = await thread.send("低速モードを設定しました")
                 await self.c.autodel_msg(msg)
-            except nextcord.Forbidden:
+            except discord.Forbidden:
                 print("権限不足")
                 print(thread)
 
     @commands.Cog.listener()
-    async def on_thread_update(self, before: nextcord.Thread, after: nextcord.Thread):
+    async def on_thread_update(self, before: discord.Thread, after: discord.Thread):
         # 監視対象であるか？
         if await self.channel_data_manager.is_maintenance_channel(channel_id=after.id, guild_id=after.guild.id):
             if after.locked != before.locked:
@@ -292,11 +290,11 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             try:
                 logs = await after.guild.audit_logs(limit=1).flatten()
                 log = logs[0]
-            except nextcord.Forbidden:
+            except discord.Forbidden:
                 pass
 
             if log is not None:
-                if nextcord.utils.utcnow() - log.created_at > timedelta(minutes=5):
+                if discord.utils.utcnow() - log.created_at > timedelta(minutes=5):
                     log = None
 
             if log is None:
@@ -316,7 +314,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
                     await after.edit(archived=True, locked=True)
 
     @commands.Cog.listener()
-    async def on_thread_delete(self, thread: nextcord.Thread):
+    async def on_thread_delete(self, thread: discord.Thread):
         # 削除されたらDBから削除する
         if await self.channel_data_manager.is_exists(channel_id=thread.id, guild_id=thread.guild.id):
             print(f'{thread.name}の情報を削除しました')
@@ -324,8 +322,8 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
 
     # スレッドにcloseって投稿されたらアーカイブする
     @commands.Cog.listener()
-    async def on_message(self, message: nextcord.Message):
-        if isinstance(message.channel, nextcord.Thread):
+    async def on_message(self, message: discord.Message):
+        if isinstance(message.channel, discord.Thread):
             if message.clean_content.lower() == 'close':
                 await message.channel.edit(archived=True)
 

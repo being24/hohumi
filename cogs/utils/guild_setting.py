@@ -7,7 +7,7 @@ from datetime import datetime
 import re
 from typing import List, Optional
 
-import nextcord
+import discord
 from sqlalchemy import delete, exc, insert, select, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import SQLAlchemyError
@@ -75,7 +75,7 @@ class GuildSettingManager():
 
         return processed_data
 
-    async def upsert_guild(self, guild: nextcord.Guild) -> None:
+    async def upsert_guild(self, guild: discord.Guild) -> None:
         """ギルドをupsertする関数
 
         Args:

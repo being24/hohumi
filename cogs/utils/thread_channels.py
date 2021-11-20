@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 import re
 from typing import List, Optional
 
-from nextcord.ext.commands.flags import F
 from sqlalchemy import delete, exc, insert, select, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import SQLAlchemyError

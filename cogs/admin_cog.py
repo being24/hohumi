@@ -4,9 +4,10 @@ import os
 import time
 from datetime import datetime
 
-import nextcord
+import discord
 import tzlocal
-from nextcord.ext import commands, tasks
+from discord.commands import slash_command
+from discord.ext import commands, tasks
 
 from .utils.common import CommonUtil
 
@@ -35,7 +36,7 @@ class Admin(commands.Cog, name='管理用コマンド群'):
     async def on_guild_join(self, guild):
         """on_guild_join時に発火する関数
         """
-        embed = nextcord.Embed(
+        embed = discord.Embed(
             title="サーバーに参加しました",
             description=f"スレッド保守bot {self.bot.user.display_name}",
             color=0x2fe48d)
@@ -71,7 +72,7 @@ class Admin(commands.Cog, name='管理用コマンド群'):
     @commands.command(aliases=['st'], hidden=True)
     async def status(self, ctx, word: str):
         try:
-            await self.bot.change_presence(activity=nextcord.Game(name=word))
+            await self.bot.change_presence(activity=discord.Game(name=word))
             await ctx.reply(f"ステータスを{word}に変更しました", mention_author=False)
         except BaseException:
             pass
@@ -82,6 +83,7 @@ class Admin(commands.Cog, name='管理用コマンド群'):
         start_time = time.time()
         mes = await ctx.reply("Pinging....")
         await mes.edit(content="pong!\n" + str(round(time.time() - start_time, 3) * 1000) + "ms")
+
 
     @commands.command(aliases=['wh'], hidden=True)
     async def where(self, ctx):
@@ -100,7 +102,7 @@ class Admin(commands.Cog, name='管理用コマンド群'):
             filename for filename in os.listdir(self.master_path + "/data")
             if filename.endswith(".sqlite")]
 
-        my_files = [nextcord.File(f'{self.master_path}/data/{i}')
+        my_files = [discord.File(f'{self.master_path}/data/{i}')
                     for i in SQLite_files]
 
         await ctx.send(files=my_files)
@@ -147,7 +149,7 @@ class Admin(commands.Cog, name='管理用コマンド群'):
 
             # json_files.extend(sql_files)
             my_files = [
-                nextcord.File(f'{self.master_path}/data/{i}')for i in sql_files]
+                discord.File(f'{self.master_path}/data/{i}')for i in sql_files]
 
             await channel.send(files=my_files)
 
