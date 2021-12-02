@@ -22,6 +22,6 @@ RUN set -x && \
     chmod 0700 ./${BOT_NAME}/bot.py && \
     apk del build-base  && \
     rm -rf /var/cache/apk/*  && \
-    echo "Hello, ${BOT_NAME} ready!" 
+    echo "Hello, ${BOT_NAME} ready!"
 
 CMD ["/opt/hofumi/bot.sh"]
