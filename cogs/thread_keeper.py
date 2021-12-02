@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from typing import List
 
 import discord
 from discord.commands import slash_command
@@ -70,6 +71,23 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
 
         msg = await thread.send("スレッドが作成されました")
         await msg.edit(content=f'{content} {msg.content}')
+
+    async def recall_of_thread(self, threads: List[discord.Thread], guild_id: int) -> None:
+        role_ids = await self.notify_role.return_notified(guild_id)
+        if role_ids is None:
+            return
+
+        content = ''
+
+        for thread in threads:
+            for id in role_ids:
+                role = thread.guild.get_role(id)
+                if role is not None:
+                    content = f'{content}{role.mention}'
+
+            msg = await thread.send("新スタッフを既存スレッドに参加させます")
+            await msg.edit(content=f'{content} {msg.content}')
+            await asyncio.sleep(1)
 
     def return_estimated_archive_time(
             self, thread: discord.Thread) -> datetime:
@@ -218,6 +236,17 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             await ctx.respond(f"{ctx.channel.name}は管理対象です")
         else:
             await ctx.respond(f"{ctx.channel.name}は管理対象外です")
+
+    @slash_command(name='join_new_staff_to_new_thread')
+    @commands.has_permissions(ban_members=True)
+    async def join_new_staff_to_new_thread(self, ctx):
+        """既存スレッドに新規スタッフを参加させるコマンド"""
+        active_threads = await ctx.guild.active_threads()
+
+        await ctx.respond("新スタッフの追加を開始します")
+
+        await self.recall_of_thread(active_threads, ctx.guild.id)
+        await ctx.respond("新スタッフの追加を終了しました")
 
     @commands.Cog.listener()
     async def on_thread_join(self, thread: discord.Thread):
