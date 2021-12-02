@@ -237,9 +237,9 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         else:
             await ctx.respond(f"{ctx.channel.name}は管理対象外です")
 
-    @slash_command(name='join_new_staff_to_new_thread')
+    @slash_command(name='join_new_staff_to_existing_thread')
     @commands.has_permissions(ban_members=True)
-    async def join_new_staff_to_new_thread(self, ctx):
+    async def join_new_staff_to_existing_thread(self, ctx):
         """既存スレッドに新規スタッフを参加させるコマンド"""
         active_threads = await ctx.guild.active_threads()
 
