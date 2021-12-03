@@ -77,14 +77,17 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         if role_ids is None:
             return
 
+        guild = self.bot.get_guild(guild_id)
+        if guild is None:
+            return
+
         content = ''
+        for id in role_ids:
+            role = guild.get_role(id)
+            if role is not None:
+                content = f'{content}{role.mention}'
 
         for thread in threads:
-            for id in role_ids:
-                role = thread.guild.get_role(id)
-                if role is not None:
-                    content = f'{content}{role.mention}'
-
             msg = await thread.send("新スタッフを既存スレッドに参加させます")
             await msg.edit(content=f'{content} {msg.content}')
             await asyncio.sleep(1)
@@ -244,7 +247,6 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         active_threads = await ctx.guild.active_threads()
 
         await ctx.respond("新スタッフの追加を開始します")
-
         await self.recall_of_thread(active_threads, ctx.guild.id)
         await ctx.respond("新スタッフの追加を終了しました")
 
