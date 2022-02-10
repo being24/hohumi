@@ -9,7 +9,7 @@ jobs:
   build_and_push:
     runs-on: ubuntu-latest
     env:
-      IMAGE_NAME: hofumi
+      IMAGE_NAME: hohumi
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -50,4 +50,4 @@ jobs:
           chmod 600 ~/.ssh/authorized_keys
           eval "$(ssh-agent -s)"
           ssh-add ~/.ssh/id_rsa
-          ssh -A -oStrictHostKeyChecking=no ${SSH_USER}@${SSH_ADDR} "cd /home/ubuntu/hofumi && bash update.sh"
+          ssh -A -oStrictHostKeyChecking=no ${SSH_USER}@${SSH_ADDR} "cd /home/ubuntu/hohumi && bash update.sh"

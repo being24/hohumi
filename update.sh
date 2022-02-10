@@ -1,4 +1,4 @@
-docker stop hofumi
-docker rm hofumi
-docker pull ghcr.io/being24/hofumi:latest
-docker run -d -v hofumi-data:/opt/hofumi/data --env-file .env --restart=always --name=hofumi ghcr.io/being24/hofumi
+docker stop hohumi
+docker rm hohumi
+docker pull ghcr.io/being24/hohumi:latest
+docker run -d -v hohumi-data:/opt/hohumi/data --env-file .env --restart=always --name=hohumi ghcr.io/being24/hohumi

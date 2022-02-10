@@ -1,6 +1,6 @@
 FROM python:3.8-alpine
 
-ARG BOT_NAME="hofumi"
+ARG BOT_NAME="hohumi"
 
 WORKDIR /opt/
 
@@ -24,4 +24,4 @@ RUN set -x && \
     rm -rf /var/cache/apk/*  && \
     echo "Hello, ${BOT_NAME} ready!"
 
-CMD ["/opt/hofumi/bot.sh"]
+CMD ["/opt/hohumi/bot.sh"]

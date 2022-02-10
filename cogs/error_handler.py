@@ -79,10 +79,7 @@ class CommandErrorHandler(commands.Cog):
         ctx   : Context
         error : Exception"""
 
-        if hasattr(ctx.command, 'on_error'):  # ローカルのハンドリングがあるコマンドは除く
-            return
-
-        elif isinstance(error, commands.errors.MissingPermissions):
+        if isinstance(error, commands.errors.MissingPermissions):
             await ctx.respond(f"you have no permission to execute {ctx.command.name}.")
             logging.error(
                 f'権限エラー: {ctx.author}\nguild: {ctx.interaction.guild}\nchannnel: {ctx.interaction.channel}',

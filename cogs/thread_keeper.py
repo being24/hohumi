@@ -42,6 +42,8 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         self.watch_dog.stop()
         self.watch_dog.start()
 
+    # 全アクティブスレッドを管理対処にする関数を作る
+
     async def extend_archive_duration(self, thread: discord.Thread):
         """チャンネルのArchive時間を拡大する関数
 
@@ -52,6 +54,9 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         if thread.auto_archive_duration != 1440:  # 60想定
             await thread.edit(auto_archive_duration=1440)
             await asyncio.sleep(10)
+
+        # アーカイブされてるときのことを考慮する
+        # なんで？
 
         await thread.edit(auto_archive_duration=60)
         await asyncio.sleep(10)
@@ -293,7 +298,11 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
                 await self.channel_data_manager.update_archived_time(channel_id=after.id, guild_id=after.guild.id, archive_time=archive_time)
 
         if before.name != after.name:
-            await after.send(f"このチャンネル名が変更されました。\n{before.name}→{after.name}")
+            try:
+                await after.send(f"このチャンネル名が変更されました。\n{before.name}→{after.name}")
+            except discord.Forbidden:
+                print("権限不足")
+                print(after)
 
         if after.parent is None:
             return
@@ -301,7 +310,11 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         # ロックされたとき
         if before.locked != after.locked:
             message = f"{after.name}は{'ロック' if after.locked else 'ロックが解除'}されました。"
-            await after.parent.send(message)
+            try:
+                await after.parent.send(message)
+            except discord.Forbidden:
+                print("権限不足")
+                print(after)
             return
 
             # アーカイブ状態に変化があった
