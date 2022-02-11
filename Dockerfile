@@ -14,7 +14,6 @@ RUN set -x && \
     python3 -m pip install -U setuptools && \
     git clone https://github.com/being24/${BOT_NAME}.git && \
     python3 -m pip install -r ./${BOT_NAME}/requirements.txt && \
-    cd .. && \
     chmod 0700 ./${BOT_NAME}/*.sh && \
     chmod 0700 ./${BOT_NAME}/bot.py && \
     apk del build-base  && \
