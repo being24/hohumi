@@ -137,11 +137,6 @@ class Admin(commands.Cog, name='管理用コマンド群'):
         if now_HM == '04:00':
             channel = self.bot.get_channel(745128369170939965)
 
-            json_files = [
-                filename for filename in os.listdir(
-                    self.master_path +
-                    "/data")if filename.endswith(".json")]
-
             sql_files = [
                 filename for filename in os.listdir(
                     self.master_path +
