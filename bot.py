@@ -15,7 +15,10 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 
 class MyBot(commands.Bot):
     def __init__(self, command_prefix):
-        super().__init__(command_prefix, help_command=None, intents=intents)
+        super().__init__(
+            command_prefix,
+            help_command=None,
+            intents=intents)
 
         for cog in os.listdir(currentpath + "/cogs"):
             if cog.endswith(".py"):

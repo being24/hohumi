@@ -42,8 +42,6 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         self.watch_dog.stop()
         self.watch_dog.start()
 
-    # 全アクティブスレッドを管理対処にする関数を作る
-
     async def extend_archive_duration(self, thread: discord.Thread):
         """チャンネルのArchive時間を拡大する関数
 
@@ -54,9 +52,6 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         if thread.auto_archive_duration != 1440:  # 60想定
             await thread.edit(auto_archive_duration=1440)
             await asyncio.sleep(10)
-
-        # アーカイブされてるときのことを考慮する
-        # なんで？
 
         await thread.edit(auto_archive_duration=60)
         await asyncio.sleep(10)
