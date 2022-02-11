@@ -13,10 +13,7 @@ RUN set -x && \
     cp /usr/share/zoneinfo/Asia/Tokyo /etc/localtime && \
     python3 -m pip install -U setuptools && \
     git clone https://github.com/being24/${BOT_NAME}.git && \
-    git clone https://github.com/Pycord-Development/pycord && \
     python3 -m pip install -r ./${BOT_NAME}/requirements.txt && \
-    cd pycord && \
-    python3 -m pip install -U . && \
     cd .. && \
     chmod 0700 ./${BOT_NAME}/*.sh && \
     chmod 0700 ./${BOT_NAME}/bot.py && \

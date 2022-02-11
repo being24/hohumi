@@ -150,7 +150,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     @slash_command(name='full_maintenance')
     @commands.has_permissions(ban_members=True)
     async def full_maintenance(self, ctx, tf: bool = True):
-        """このサーバーの全スレッドを保守するようにするコマンド"""
+        """このサーバーの新規作成されるスレッドを保守するようにするコマンド"""
         if isinstance(ctx.channel, discord.DMChannel):
             msg = await ctx.respond("このコマンドはサーバーチャンネル専用です")
             await self.c.autodel_msg(msg)
@@ -249,7 +249,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     @slash_command(name='list_active_threads')
     @commands.has_permissions(ban_members=True)
     async def list_active_threads(self, ctx):
-        """アクティブのスレッドを一覧する関数"""
+        """管理対象になっていないスレッドの数を表示するコマンド"""
         threads = await ctx.guild.active_threads()
         not_maintained_threads = []
         for thread in threads:
@@ -261,7 +261,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     @slash_command(name='maintain_all_threads')
     @commands.has_permissions(ban_members=True)
     async def maintain_all_threads(self, ctx):
-        """このサーバーのすべてのスレッドを管理対象にする関数"""
+        """このサーバーのすべてのスレッドを管理対象にするコマンド"""
         threads = await ctx.guild.active_threads()
         not_maintained_threads = []
         for thread in threads:
