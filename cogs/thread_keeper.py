@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import List
 
 import discord
-from discord.commands import slash_command
+from discord.commands import permissions, slash_command
 from discord.ext import commands, tasks
 
 from .utils.common import CommonUtil
@@ -193,7 +193,6 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         await self.notify_role.delete_notify(ctx.guild.id)
         await ctx.reply(f'{ctx.guild}の新規作成スレッドには今後自動参加しません', mention_author=False)
 
-    # @commands.command(name="keep_status_of_guild")
     @slash_command(name='keep_status_of_guild')
     @commands.has_permissions(ban_members=True)
     async def keep_status_of_guild(self, ctx):
@@ -205,7 +204,6 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             await self.c.autodel_msg(msg)
         else:
             response_txt += f"全保守の設定は{guild_setting.keep_all}です\n"
-            # await ctx.respond(f"全保守の設定は{guild_setting.keep_all}です")
 
         channel_data = await self.channel_data_manager.get_data_guild(
             guild_id=ctx.guild.id)
@@ -214,7 +212,6 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             await self.c.autodel_msg(msg)
         else:
             response_txt += f"現在{len(channel_data)}チャンネルを保守しています\n"
-            # await ctx.respond(f"現在{len(channel_data)}チャンネルを保守しています")
 
         notify_settings = await self.notify_role.return_notified(ctx.guild.id)
         if notify_settings is None:
@@ -229,7 +226,6 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
 
         await ctx.respond(f"{response_txt}", allowed_mentions=discord.AllowedMentions.none())
 
-    # @commands.command()
     @slash_command(name='thread_status')
     @commands.has_permissions(ban_members=True)
     async def thread_status(self, ctx):
@@ -254,6 +250,34 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         await ctx.respond("新スタッフの追加を開始します")
         await self.recall_of_thread(active_threads, ctx.guild.id)
         await ctx.respond("新スタッフの追加を終了しました")
+
+    @slash_command(name='list_active_threads')
+    @commands.has_permissions(ban_members=True)
+    async def list_active_threads(self, ctx):
+        """アクティブのスレッドを一覧する関数"""
+        threads = await ctx.guild.active_threads()
+        not_maintained_threads = []
+        for thread in threads:
+            if not await self.channel_data_manager.is_maintenance_channel(thread.id, guild_id=ctx.guild.id):
+                not_maintained_threads.append(thread)
+
+        await ctx.respond(f"{len(not_maintained_threads)}チャンネルが非管理対象です")
+
+    @slash_command(name='maintain_all_threads')
+    @commands.has_permissions(ban_members=True)
+    async def maintain_all_threads(self, ctx):
+        """このサーバーのすべてのスレッドを管理対象にする関数"""
+        threads = await ctx.guild.active_threads()
+        not_maintained_threads = []
+        for thread in threads:
+            if not await self.channel_data_manager.is_maintenance_channel(thread.id, guild_id=ctx.guild.id):
+                not_maintained_threads.append(thread)
+
+        for thread in not_maintained_threads:
+            archive_time = self.return_estimated_archive_time(thread)
+            await self.channel_data_manager.resister_channel(channel_id=ctx.channel.id, guild_id=ctx.guild.id, archive_time=archive_time)
+
+        await ctx.respond(f"{len(not_maintained_threads)}チャンネルを管理対象に設定しました")
 
     @commands.Cog.listener()
     async def on_thread_join(self, thread: discord.Thread):
@@ -301,8 +325,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             try:
                 await after.send(f"このチャンネル名が変更されました。\n{before.name}→{after.name}")
             except discord.Forbidden:
-                print("権限不足")
-                print(after)
+                self.log_error(f"forbidden {after.name}")
 
         if after.parent is None:
             return
@@ -313,8 +336,8 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             try:
                 await after.parent.send(message)
             except discord.Forbidden:
-                print("権限不足")
-                print(after)
+                self.log_error(f"forbidden {after.name}")
+
             return
 
             # アーカイブ状態に変化があった
@@ -387,7 +410,6 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     @watch_dog.error
     async def watch_dog_error(self, error):
         self.log_error(error)
-        print(error)
         return
 
 
