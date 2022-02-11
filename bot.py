@@ -18,7 +18,9 @@ class MyBot(commands.Bot):
         super().__init__(
             command_prefix,
             help_command=None,
-            intents=intents)
+            intents=intents,
+        )
+        # debug_guilds=[609058923353341973])
 
         for cog in os.listdir(currentpath + "/cogs"):
             if cog.endswith(".py"):
