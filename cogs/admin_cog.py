@@ -84,7 +84,6 @@ class Admin(commands.Cog, name='管理用コマンド群'):
         mes = await ctx.reply("Pinging....")
         await mes.edit(content="pong!\n" + str(round(time.time() - start_time, 3) * 1000) + "ms")
 
-
     @commands.command(aliases=['wh'], hidden=True)
     async def where(self, ctx):
         await ctx.reply("現在入っているサーバーは以下です", mention_author=False)
@@ -98,12 +97,13 @@ class Admin(commands.Cog, name='管理用コマンド群'):
 
     @commands.command(hidden=True)
     async def back_up(self, ctx):
-        SQLite_files = [
-            filename for filename in os.listdir(self.master_path + "/data")
-            if filename.endswith(".sqlite")]
+        sql_files = [
+            filename for filename in os.listdir(
+                self.master_path +
+                "/data")if filename.endswith(".sqlite3")]
 
         my_files = [discord.File(f'{self.master_path}/data/{i}')
-                    for i in SQLite_files]
+                    for i in sql_files]
 
         await ctx.send(files=my_files)
 
