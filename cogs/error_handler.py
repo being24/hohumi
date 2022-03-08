@@ -75,15 +75,21 @@ class CommandErrorHandler(commands.Cog):
 
     @commands.Cog.listener()
     async def on_application_command_error(self, ctx, error):
-        """The event triggered when an error is raised while invoking a command.
+        """
+        The event triggered when an error is raised while invoking a command.
         ctx   : Context
-        error : Exception"""
+        error : Exception
+        """
 
         if isinstance(error, commands.errors.MissingPermissions):
             await ctx.respond(f"you have no permission to execute {ctx.command.name}.")
             logging.error(
                 f'権限エラー: {ctx.author}\nguild: {ctx.interaction.guild}\nchannnel: {ctx.interaction.channel}',
                 exc_info=True)
+            return
+
+        elif isinstance(error.original, commands.errors.MessageNotFound):
+            await ctx.respond("message not found.", delete_after=5)
             return
 
         else:
