@@ -302,6 +302,10 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
 
     @commands.Cog.listener()
     async def on_thread_update(self, before: discord.Thread, after: discord.Thread):
+        # 権限がないのであればスルーする
+        if not after.permissions_for(after.guild.me).manage_threads:
+            return
+
         # 監視対象であるか？
         if await self.channel_data_manager.is_maintenance_channel(channel_id=after.id, guild_id=after.guild.id):
             if after.locked != before.locked:
