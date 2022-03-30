@@ -53,6 +53,9 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             await thread.edit(auto_archive_duration=1440)
             await asyncio.sleep(10)
 
+        if thread.archive is True:
+            return
+
         await thread.edit(auto_archive_duration=60)
         await asyncio.sleep(10)
         await thread.edit(auto_archive_duration=1440)
