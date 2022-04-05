@@ -56,9 +56,12 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         if thread.archive is True:
             return
 
-        await thread.edit(auto_archive_duration=60)
-        await asyncio.sleep(10)
-        await thread.edit(auto_archive_duration=1440)
+        try:
+            await thread.edit(auto_archive_duration=60)
+            await asyncio.sleep(10)
+            await thread.edit(auto_archive_duration=1440)
+        except discord.Forbidden:
+            print('Forbidden')
 
     async def call_of_thread(self, thread: discord.Thread) -> None:
         role_ids = await self.notify_role.return_notified(thread.guild.id)
@@ -362,7 +365,10 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
                 message = f"{log.user}によって{after.name}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
 
             if log is None or log.user.id != self.bot.user.id:
-                await after.parent.send(message)
+                try:
+                    await after.parent.send(message)
+                except discord.Forbidden:
+                    print(message)
 
             # アーカイブされた
             if before.archived is False:
