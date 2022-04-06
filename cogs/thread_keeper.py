@@ -62,6 +62,10 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             await thread.edit(auto_archive_duration=1440)
         except discord.Forbidden:
             print('Forbidden')
+        except discord.HTTPException:
+            print('HTTPException')
+        except BaseException:
+            print('BaseException')
 
     async def call_of_thread(self, thread: discord.Thread) -> None:
         role_ids = await self.notify_role.return_notified(thread.guild.id)
