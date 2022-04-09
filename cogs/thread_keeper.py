@@ -397,7 +397,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
             if message.clean_content.lower() == 'close':
                 await message.channel.edit(archived=True)
 
-    @tasks.loop(minutes=5.0)
+    @tasks.loop(minutes=15.0)
     async def watch_dog(self):
         # 期限短いやつを延長する
         about_to_expire = await self.channel_data_manager.get_about_to_expire_channel()
