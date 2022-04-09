@@ -413,7 +413,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
                 else:
                     await self.extend_archive_duration(thread)
 
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
 
     @watch_dog.before_loop
     async def before_printer(self):
