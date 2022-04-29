@@ -406,6 +406,8 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         else:
             for channel in about_to_expire:
                 guild = self.bot.get_guild(channel.guild_id)
+                if guild is None:
+                    continue
                 thread = guild.get_thread(channel.channel_id)
                 if thread is None:
                     self.log_unfounded_thread(channel)
