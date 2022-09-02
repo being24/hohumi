@@ -1,3 +1,4 @@
+import logging
 import pathlib
 import time
 from datetime import datetime
@@ -35,7 +36,10 @@ class Admin(commands.Cog, name="管理用コマンド群"):
             title="サーバーに参加しました", description=f"スレッド保守bot {self.bot.user.display_name}", color=0x2FE48D
         )
         embed.set_author(name=f"{self.bot.user.name}", icon_url=f"{self.bot.user.avatar.replace(format='png').url}")
-        await guild.system_channel.send(embed=embed)
+        try:
+            await guild.system_channel.send(embed=embed)
+        except discord.Forbidden:
+            pass
 
     @commands.command(aliases=["re"], hidden=True)
     async def reload(self, ctx):
@@ -50,15 +54,16 @@ class Admin(commands.Cog, name="管理用コマンド群"):
                 print(e)
                 await ctx.reply(e, mention_author=False)
 
-            await ctx.reply(f"{reloaded_list}をreloadしました", mention_author=False)
+            await ctx.reply(f"{' '.join(reloaded_list)}をreloadしました", mention_author=False)
 
     @commands.command(aliases=["st"], hidden=True)
     async def status(self, ctx, word: str = "Thread管理中"):
         try:
             await self.bot.change_presence(activity=discord.Game(name=word))
             await ctx.reply(f"ステータスを{word}に変更しました", mention_author=False)
-        except BaseException:
-            pass
+
+        except discord.Forbidden or discord.HTTPException:
+            logging.warning("ステータス変更に失敗しました")
 
     @commands.command(aliases=["p"], hidden=False, description="疎通確認")
     async def ping(self, ctx):
@@ -69,9 +74,8 @@ class Admin(commands.Cog, name="管理用コマンド群"):
 
     @commands.command(aliases=["wh"], hidden=True)
     async def where(self, ctx):
-        await ctx.reply("現在入っているサーバーは以下です", mention_author=False)
         server_list = [i.name.replace("\u3000", " ") for i in ctx.bot.guilds]
-        await ctx.reply(f"{server_list}", mention_author=False)
+        await ctx.reply(f"現在入っているサーバーは以下の通りです\n{' '.join(server_list)}", mention_author=False)
 
     @commands.command(hidden=True)
     async def back_up(self, ctx):
