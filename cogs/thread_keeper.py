@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import List
 
 import discord
-from discord.commands import permissions, slash_command
+from discord import app_commands
 from discord.ext import commands, tasks
 
 from .utils.common import CommonUtil
@@ -14,8 +14,10 @@ from .utils.guild_setting import GuildSettingManager
 from .utils.notify_role import NotifySettingManager
 from .utils.thread_channels import ChannelData, ChannelDataManager
 
+MY_GUILD = discord.Object(id=609058923353341973)
 
-class Hofumi(commands.Cog, name='Thread管理用cog'):
+
+class Hofumi(commands.Cog, name="Thread管理用cog"):
     """
     管理用のコマンドです
     """
@@ -28,10 +30,15 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         self.channel_data_manager = ChannelDataManager()
         self.notify_role = NotifySettingManager()
 
+        self.tree = app_commands.CommandTree(bot)
+
+    async def setup_hook(self):
+        self.tree.copy_global_to(guild=MY_GUILD)
+        await self.tree.sync(guild=MY_GUILD)
+
     @commands.Cog.listener()
     async def on_ready(self):
-        """on_ready時に発火する関数
-        """
+        """on_ready時に発火する関数"""
         await self.guild_setting_mng.create_table()
         await self.channel_data_manager.create_table()
         await self.notify_role.create_table()
@@ -39,9 +46,10 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
         for guild in self.bot.guilds:
             await self.guild_setting_mng.upsert_guild(guild)
 
-        self.watch_dog.stop()
-        self.watch_dog.start()
+        # self.watch_dog.stop()
+        # self.watch_dog.start()
 
+    '''
     async def extend_archive_duration(self, thread: discord.Thread):
         """チャンネルのArchive時間を拡大する関数
 
@@ -140,7 +148,7 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
                 mgs = await ctx.respond(f"{ctx.channel.name}は管理対象です")
                 await self.c.autodel_msg(mgs)
 
-            else:  # 対象でなければ、upsert
+            else:  # 対象でなければ、upsert # TODO: エラーが出る
                 archive_time = self.return_estimated_archive_time(ctx.channel)
                 await self.channel_data_manager.resister_channel(channel_id=ctx.channel.id, guild_id=ctx.guild.id, archive_time=archive_time)
                 mgs = await ctx.respond(f"{ctx.channel.name}を管理対象に設定しました")
@@ -426,7 +434,8 @@ class Hofumi(commands.Cog, name='Thread管理用cog'):
     async def watch_dog_error(self, error):
         self.log_error(error)
         return
+    '''
 
 
-def setup(bot):
-    bot.add_cog(Hofumi(bot))
+async def setup(bot):
+    await bot.add_cog(Hofumi(bot))

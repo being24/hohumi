@@ -80,11 +80,16 @@ class Admin(commands.Cog, name="管理用コマンド群"):
     @commands.command(hidden=True)
     async def back_up(self, ctx):
         # sql_files = [filename for filename in os.listdir(self.master_path  "/data") if filename.endswith(".sqlite3")]
-        sql_files = list(self.master_path.glob("data/*.sqlite3"))
+        data_files = list(self.master_path.glob("data/*.sqlite3"))
 
-        my_files = [discord.File(file) for file in sql_files]
+        discord_files = [discord.File(file) for file in data_files]
 
-        await ctx.send(files=my_files)
+        await ctx.send(files=discord_files)
+
+        log_file = self.master_path / "log" / "discord.log"
+        discord_log = discord.File(log_file)
+
+        await ctx.send(files=[discord_log])
 
     @commands.command(hidden=True)
     async def restore_one(self, ctx):
@@ -103,11 +108,16 @@ class Admin(commands.Cog, name="管理用コマンド群"):
         if now_HM == "04:00":
             channel = self.bot.get_channel(745128369170939965)
 
-            sql_files = list(self.master_path.glob("data/*.sqlite3"))
+            data_files = list(self.master_path.glob("data/*.sqlite3"))
 
-            my_files = [discord.File(file) for file in sql_files]
+            discord_files = [discord.File(file) for file in data_files]
 
-            await channel.send(files=my_files)
+            await channel.send(files=discord_files)
+
+            log_file = self.master_path / "log" / "discord.log"
+            discord_log = discord.File(log_file)
+
+            await channel.send(files=[discord_log])
 
     @auto_backup.before_loop
     async def before_printer(self):

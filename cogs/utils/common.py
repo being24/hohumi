@@ -1,16 +1,15 @@
-# !/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
+import logging
 import typing
+
 import discord
 
 
-class CommonUtil():
+class CommonUtil:
     def __init__(self):
         pass
 
     @staticmethod
-    async def autodel_msg(msg: discord.Message, second: int = 5):
+    async def delete_after(msg: discord.Message, second: int = 5):
         """渡されたメッセージを指定秒数後に削除する関数
 
         Args:
@@ -18,26 +17,26 @@ class CommonUtil():
             second (int, optional): 秒数. Defaults to 5.
         """
         if isinstance(msg, discord.Interaction):
-            msg = await msg.original_message()
-
-        try:
-            await msg.delete(delay=second)
-        except discord.Forbidden:
-            pass
+            try:
+                await msg.delete_original_response()
+            except discord.Forbidden:
+                logging.error("メッセージの削除に失敗しました。Forbidden")
+        else:
+            try:
+                await msg.delete(delay=second)
+            except discord.Forbidden:
+                logging.error("メッセージの削除に失敗しました。Forbidden")
 
     @staticmethod
-    def return_member_or_role(guild: discord.Guild,
-                              id: int) -> typing.Union[discord.Member,
-                                                       discord.Role,
-                                                       None]:
+    def return_member_or_role(guild: discord.Guild, id: int) -> typing.Union[discord.Member, discord.Role, None]:
         """メンバーか役職オブジェクトを返す関数
 
         Args:
-            guild (discord.guild): nextcordのguildオブジェクト
+            guild (discord.guild): discordpyのguildオブジェクト
             id (int): 役職かメンバーのID
 
         Returns:
-            typing.Union[discord.Member, discord.Role]: discord.Memberかnextcord.Role
+            typing.Union[discord.Member, discord.Role]: discord.Memberかdiscord.Role
         """
         user_or_role = guild.get_role(id)
         if user_or_role is None:

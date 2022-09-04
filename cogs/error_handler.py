@@ -11,7 +11,7 @@ class CommandErrorHandler(commands.Cog):
         self.bot = bot
 
     @staticmethod
-    async def autodel_msg(msg: discord.Message, second: int = 5):
+    async def delete_after(msg: discord.Message, second: int = 5):
         """渡されたメッセージを指定秒数後に削除する関数
 
         Args:
@@ -29,47 +29,40 @@ class CommandErrorHandler(commands.Cog):
         ctx   : Context
         error : Exception"""
 
-        if hasattr(ctx.command, 'on_error'):  # ローカルのハンドリングがあるコマンドは除く
+        if hasattr(ctx.command, "on_error"):  # ローカルのハンドリングがあるコマンドは除く
             return
 
         if isinstance(error, commands.CommandNotFound):
             return
 
         elif isinstance(error, commands.DisabledCommand):
-            msg = await ctx.reply(f'{ctx.command} has been disabled.')
-            await self.autodel_msg(msg)
+            msg = await ctx.reply(f"{ctx.command} has been disabled.")
+            await self.delete_after(msg)
             return
 
         elif isinstance(error, commands.CheckFailure):
-            await ctx.reply(f'you have no permission to execute {ctx.command}.')
+            await ctx.reply(f"you have no permission to execute {ctx.command}.")
             return
 
         elif isinstance(error, commands.NoPrivateMessage):
             try:
-                return await ctx.reply(f'{ctx.command} can not be used in Private Messages.')
+                return await ctx.reply(f"{ctx.command} can not be used in Private Messages.")
             except discord.HTTPException:
                 print("couldn't send direct message")
 
         elif isinstance(error, commands.BadArgument):
             msg = await ctx.reply("無効な引数です")
-            await self.autodel_msg(msg)
+            await self.delete_after(msg)
 
         elif isinstance(error, commands.MissingRequiredArgument):
             msg = await ctx.reply("引数が足りません")
-            await self.autodel_msg(msg)
+            await self.delete_after(msg)
 
         else:
-            error = getattr(error, 'original', error)
-            print(
-                'Ignoring exception in command {}:'.format(
-                    ctx.command),
-                file=sys.stderr)
-            traceback.print_exception(
-                type(error),
-                error,
-                error.__traceback__,
-                file=sys.stderr)
-            error_content = f'error content: {error}\nmessage_content: {ctx.message.content}\nmessage_author : {ctx.message.author}\n{ctx.message.jump_url}'
+            error = getattr(error, "original", error)
+            print("Ignoring exception in command {}:".format(ctx.command), file=sys.stderr)
+            traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+            error_content = f"error content: {error}\nmessage_content: {ctx.message.content}\nmessage_author : {ctx.message.author}\n{ctx.message.jump_url}"
 
             logging.error(error_content, exc_info=True)
 
@@ -84,8 +77,9 @@ class CommandErrorHandler(commands.Cog):
         if isinstance(error, commands.errors.MissingPermissions):
             await ctx.respond(f"you have no permission to execute {ctx.command.name}.")
             logging.error(
-                f'権限エラー: {ctx.author}\nguild: {ctx.interaction.guild}\nchannnel: {ctx.interaction.channel}',
-                exc_info=True)
+                f"権限エラー: {ctx.author}\nguild: {ctx.interaction.guild}\nchannel: {ctx.interaction.channel}",
+                exc_info=True,
+            )
             return
 
         elif isinstance(error.original, commands.errors.MessageNotFound):
@@ -93,20 +87,13 @@ class CommandErrorHandler(commands.Cog):
             return
 
         else:
-            error = getattr(error, 'original', error)
-            print(
-                'Ignoring exception in command {}:'.format(
-                    ctx.command),
-                file=sys.stderr)
-            traceback.print_exception(
-                type(error),
-                error,
-                error.__traceback__,
-                file=sys.stderr)
-            error_content = f'error content: {error}\nmessage_content: {ctx.command.name}\nmessage_author : {ctx.author}\nguild: {ctx.interaction.guild}\nchannnel: {ctx.interaction.channel}'
+            error = getattr(error, "original", error)
+            print("Ignoring exception in command {}:".format(ctx.command), file=sys.stderr)
+            traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
+            error_content = f"error content: {error}\nmessage_content: {ctx.command.name}\nmessage_author : {ctx.author}\nguild: {ctx.interaction.guild}\nchannnel: {ctx.interaction.channel}"
 
             logging.error(error_content, exc_info=True)
 
 
-def setup(bot):
-    bot.add_cog(CommandErrorHandler(bot))
+async def setup(bot):
+    await bot.add_cog(CommandErrorHandler(bot))

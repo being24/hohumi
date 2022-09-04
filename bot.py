@@ -31,8 +31,9 @@ class MyBot(commands.Bot):
     async def on_ready(self):
         print("-----")
         print("Logged in as")
-        print(self.user.name)
-        print(self.user.id)
+        if self.user:
+            print(self.user.name)
+            print(self.user.id)
         print("------")
         logging.warning("rebooted")
         await bot.change_presence(activity=discord.Game(name="Thread管理中"))
