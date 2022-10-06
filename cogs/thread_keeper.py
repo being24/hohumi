@@ -1,5 +1,3 @@
-# !/usr/bin/env python3
-
 import asyncio
 import logging
 from datetime import datetime, timedelta
@@ -30,11 +28,9 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         self.channel_data_manager = ChannelDataManager()
         self.notify_role = NotifySettingManager()
 
-        self.tree = app_commands.CommandTree(bot)
-
     async def setup_hook(self):
-        self.tree.copy_global_to(guild=MY_GUILD)
-        await self.tree.sync(guild=MY_GUILD)
+        # self.bot.tree.copy_global_to(guild=MY_GUILD)
+        pass
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -46,8 +42,19 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         for guild in self.bot.guilds:
             await self.guild_setting_mng.upsert_guild(guild)
 
+        await self.bot.tree.sync()
+
         # self.watch_dog.stop()
         # self.watch_dog.start()
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        print(message.content)
+
+    @app_commands.command()
+    async def hello(self, interaction: discord.Interaction):
+        """Says hello!"""
+        await interaction.response.send_message(f"Hi, {interaction.user.mention}")
 
     '''
     async def extend_archive_duration(self, thread: discord.Thread):
