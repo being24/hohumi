@@ -9,16 +9,16 @@ class CommonUtil:
         pass
 
     @staticmethod
-    async def delete_after(msg: discord.Message, second: int = 5):
+    async def delete_after(msg: discord.Message | discord.InteractionMessage, second: int = 5):
         """渡されたメッセージを指定秒数後に削除する関数
 
         Args:
             msg (discord.Message): 削除するメッセージオブジェクト
             second (int, optional): 秒数. Defaults to 5.
         """
-        if isinstance(msg, discord.Interaction):
+        if isinstance(msg, discord.InteractionMessage):
             try:
-                await msg.delete_original_response()
+                await msg.delete(delay=second)
             except discord.Forbidden:
                 logging.error("メッセージの削除に失敗しました。Forbidden")
         else:
