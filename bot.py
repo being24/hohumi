@@ -19,7 +19,6 @@ class MyBot(commands.Bot):
             help_command=None,
             intents=intents,
         )
-        # debug_guilds=[609058923353341973])
 
     async def setup_hook(self) -> None:
         for cog in current_path.glob("cogs/*.py"):
