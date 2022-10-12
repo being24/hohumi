@@ -47,78 +47,98 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         # self.watch_dog.stop()
         # self.watch_dog.start()
 
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        print(message.content)
+    # @commands.Cog.listener()
+    # async def on_message(self, message: discord.Message):
+    #     print(message.content)
 
     @app_commands.command()
     async def hello(self, interaction: discord.Interaction):
         """Says hello!"""
         await interaction.response.send_message(f"Hi, {interaction.user.mention}")
 
-    '''
     async def extend_archive_duration(self, thread: discord.Thread):
-        """チャンネルのArchive時間を拡大する関数
+        """チャンネルのArchive時間を延長する関数
+            今指定されている時間以外の時間を指定して、その後に1wにすることでサイレントに延長する
 
         Args:
             channel (discord.Thread): 対象のスレッド
         """
 
-        if thread.auto_archive_duration != 1440:  # 60想定
-            await thread.edit(auto_archive_duration=1440)
-            await asyncio.sleep(10)
+        # とりあえず60mに指定する、もしも60mになっていたら1440mにする
+        if thread.auto_archive_duration != 60:
+            tmp_archive_duration = 60
+        else:
+            tmp_archive_duration = 1440
 
-        if thread.archive is True:
+        await thread.edit(auto_archive_duration=tmp_archive_duration)
+        await asyncio.sleep(10)
+
+        if thread.archived:
             return
 
         try:
-            await thread.edit(auto_archive_duration=60)
-            await asyncio.sleep(10)
             await thread.edit(auto_archive_duration=1440)
         except discord.Forbidden:
-            print('Forbidden')
+            print("Forbidden")
         except discord.HTTPException:
-            print('HTTPException')
+            print("HTTPException")
         except BaseException:
-            print('BaseException')
+            print("BaseException")
 
-    async def call_of_thread(self, thread: discord.Thread) -> None:
+    async def add_staff_to_thread(self, thread: discord.Thread):
+        """スレッドにスタッフを追加する関数
+
+        Args:
+            thread (discord.Thread): 対象のスレッド
+        """
+
         role_ids = await self.notify_role.return_notified(thread.guild.id)
         if role_ids is None:
             return
 
-        content = ''
+        content = ""
 
         for id in role_ids:
             role = thread.guild.get_role(id)
             if role is not None:
-                content = f'{content}{role.mention}'
+                content = f"{content}{role.mention}"
 
-        msg = await thread.send("スレッドが作成されました")
-        await msg.edit(content=f'{content} {msg.content}')
-
-    async def recall_of_thread(self, threads: List[discord.Thread], guild_id: int) -> None:
-        role_ids = await self.notify_role.return_notified(guild_id)
-        if role_ids is None:
+        if isinstance(thread.parent, discord.TextChannel):
+            msg = await thread.send("スレッドが作成されました")
+        elif isinstance(thread.parent, discord.ForumChannel):
+            msg = await thread.send("フォーラムチャンネルが作成されました")
+        else:
             return
 
-        guild = self.bot.get_guild(guild_id)
+        await msg.edit(content=f"{content} {msg.content}")
+
+    async def readd_staff_to_thread(self, threads: List[discord.Thread]):
+
+        if len(threads) == 0:
+            return
+
+        guild = threads[0].guild
         if guild is None:
+            logging.warning("guild is None @readd_staff_to_thread")
             return
 
-        content = ''
+        role_ids = await self.notify_role.return_notified(guild.id)
+        if role_ids is None:
+            logging.info("function return due to role_ids is None @readd_staff_to_thread")
+            return
+
+        content = ""
         for id in role_ids:
             role = guild.get_role(id)
             if role is not None:
-                content = f'{content}{role.mention}'
+                content = f"{content}{role.mention}"
 
         for thread in threads:
             msg = await thread.send("新スタッフを既存スレッドに参加させます")
-            await msg.edit(content=f'{content} {msg.content}')
+            await msg.edit(content=f"{content} {msg.content}")
             await asyncio.sleep(1)
 
-    def return_estimated_archive_time(
-            self, thread: discord.Thread) -> datetime:
+    def return_estimated_archive_time(self, thread: discord.Thread) -> datetime:
         """スレッドのArchive時間を返す関数
 
         Args:
@@ -127,92 +147,112 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         Returns:
             datetime: 推測されるArchive時間
         """
-        archive_time = thread.archive_timestamp + \
-            timedelta(minutes=thread.auto_archive_duration)
+        archive_time = thread.archive_timestamp + timedelta(minutes=thread.auto_archive_duration)
         return archive_time
 
-    def log_unfounded_thread(self, channel: ChannelData) -> None:
-        error_content = f'error content: unfounded_thread\nmessage_content: {channel.channel_id}\nguild : {channel.guild_id}\n{channel.archive_time}'
-        logging.error(error_content, exc_info=True)
-
-    def log_error(self, error) -> None:
-        error_content = f'error content: {error}\n'
-        logging.error(error_content, exc_info=True)
-
-    # @commands.command(name='maintenance_this_thread', aliases=['m_channel'])
-    @slash_command(name='maintenance_this_thread')
-    @commands.has_permissions(ban_members=True)
-    async def maintenance_this_thread(self, ctx, tf: bool = True):
+    @app_commands.command(name="maintenance_this_thread", description="このスレッドを保守対象に設定します")
+    @app_commands.default_permissions(manage_guild=True)
+    async def maintenance_this_thread(self, interaction: discord.Interaction, tf: bool = True):
         """スレッドを保守かどうかを設定するコマンド"""
-        if not isinstance(ctx.channel, discord.Thread):
-            msg = await ctx.respond("このコマンドはスレッドチャンネル専用です")
-            await self.c.autodel_msg(msg)
+        if not isinstance(interaction.channel, discord.Thread):
+            await interaction.response.send_message("このコマンドはスレッドチャンネル専用です")
+            msg = await interaction.original_response()
+            await self.c.delete_after(msg)
             return
 
-        if tf is True:
-            # まず、現在管理対象であるかのチェック
-            if await self.channel_data_manager.is_maintenance_channel(ctx.channel.id, guild_id=ctx.guild.id):
-                mgs = await ctx.respond(f"{ctx.channel.name}は管理対象です")
-                await self.c.autodel_msg(mgs)
+        if interaction.guild is None:
+            logging.warning("guild is None @resister_notify")
+            return
 
-            else:  # 対象でなければ、upsert # TODO: エラーが出る
-                archive_time = self.return_estimated_archive_time(ctx.channel)
-                await self.channel_data_manager.resister_channel(channel_id=ctx.channel.id, guild_id=ctx.guild.id, archive_time=archive_time)
-                mgs = await ctx.respond(f"{ctx.channel.name}を管理対象に設定しました")
+        if tf:
+            # 管理対象であるかのチェック
+            if await self.channel_data_manager.is_maintenance_channel(
+                interaction.channel.id, guild_id=interaction.guild.id
+            ):
+                await interaction.response.send_message(f"{interaction.channel.name}は管理対象です")
+                msg = await interaction.original_response()
+                await self.c.delete_after(msg)
+
+            else:  # 対象でなければ、upsert
+                archive_time = self.return_estimated_archive_time(interaction.channel)
+                await self.channel_data_manager.resister_channel(
+                    channel_id=interaction.channel.id, guild_id=interaction.guild.id, archive_time=archive_time
+                )
+                await interaction.response.send_message(f"{interaction.channel.name}を管理対象に設定しました")
 
         else:
-            # まず、管理対象であるかのチェック
-            if not await self.channel_data_manager.is_maintenance_channel(ctx.channel.id, guild_id=ctx.guild.id):
-                mgs = await ctx.respond(f"{ctx.channel.name}は管理対象ではありません")
-                await self.c.autodel_msg(mgs)
+            # 管理対象であるかのチェック
+            if not await self.channel_data_manager.is_maintenance_channel(interaction.channel.id, guild_id=guild.id):
+                await interaction.response.send_message(f"{interaction.channel.name}は管理対象ではありません")
+                msg = await interaction.original_response()
+                await self.c.delete_after(msg)
                 return
 
             else:
-                await self.channel_data_manager.set_maintenance_channel(channel_id=ctx.channel.id, guild_id=ctx.guild.id, tf=False)
-                mgs = await ctx.respond(f"{ctx.channel.name}を管理対象から外しました")
+                await self.channel_data_manager.set_maintenance_channel(
+                    channel_id=interaction.channel.id, guild_id=guild.id, tf=False
+                )
+                await interaction.response.send_message(f"{interaction.channel.name}を管理対象から外しました")
+                msg = await interaction.original_response()
+                await self.c.delete_after(msg)
 
-    # @commands.command(name='full_maintenance', aliases=['m_guild'])
-    @slash_command(name='full_maintenance')
-    @commands.has_permissions(ban_members=True)
-    async def full_maintenance(self, ctx, tf: bool = True):
+    @app_commands.command(name="full_maintenance", description="このサーバーに今後作成されるスレッドを保守します")
+    @app_commands.guild_only()
+    async def full_maintenance(self, interaction: discord.Interaction, tf: bool = True):
         """このサーバーの新規作成されるスレッドを保守するようにするコマンド"""
-        if isinstance(ctx.channel, discord.DMChannel):
-            msg = await ctx.respond("このコマンドはサーバーチャンネル専用です")
-            await self.c.autodel_msg(msg)
+        if isinstance(interaction.channel, discord.DMChannel):
+            await interaction.response.send_message("このコマンドはサーバーチャンネル専用です")
+            msg = await interaction.original_response()
+            await self.c.delete_after(msg)
             return
 
+        if interaction.guild is None:
+            logging.warning("guild is None @resister_notify")
+            return
         # DBの設定を書き換える
-        await self.guild_setting_mng.set_full_maintainance(ctx.guild.id, tf)
+        await self.guild_setting_mng.set_full_maintenance(interaction.guild.id, tf)
 
         if tf:
-            string = '有効'
+            string = "有効"
         else:
-            string = '無効'
+            string = "無効"
 
-        await ctx.respond(f'{ctx.guild.name}の全スレッドの保守を{string}に設定しました')
+        await interaction.response.send_message(f"{interaction.guild.name}の全スレッドの保守を{string}に設定しました")
 
-    @commands.command(name='resister_notify',
-                      aliases=['add_notify'],
-                      description='スレッドに自動参加する役職を登録するコマンド')
-    # @slash_command( name='resister_notify')
-    @commands.has_permissions(ban_members=True)
-    async def resister_notify(self, ctx, *bot_role: discord.Role):
+    @commands.command(name="resister_notify", description="スレッドに自動参加するroleを登録します")
+    @commands.has_permissions(manage_guild=True)
+    @commands.guild_only()
+    async def resister_notify(self, ctx: commands.Context, *bot_role: discord.Role):
         """スレッド作成時に自動参加するbot_roleを設定するコマンド"""
+
+        # 可変長引数に対応したらスラコマ化を考える
 
         role_ids = [role.id for role in bot_role]
         role_mentions = [role.mention for role in bot_role]
-        role_mentions = ','.join(role_mentions)
+        role_mentions = ",".join(role_mentions)
+
+        if ctx.guild is None:
+            logging.warning("guild is None @resister_notify")
+            return
 
         await self.notify_role.resister_notify(ctx.guild.id, role_ids)
-        await ctx.reply(f'{ctx.guild}の新規作成スレッドには今後 {role_mentions} が自動参加します', mention_author=False, allowed_mentions=discord.AllowedMentions.none())
+        await ctx.reply(
+            f"{ctx.guild}の新規作成スレッドには今後 {role_mentions} が自動参加します",
+            mention_author=False,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
-    @commands.command(name="remove_notify",
-                      description="スレッドに自動参加する役職を全削除するコマンド")
-    @commands.has_permissions(ban_members=True)
-    async def remove_notify(self, ctx):
+    @commands.command(name="remove_notify", description="スレッドに自動参加する役職を全削除するコマンド")
+    @commands.has_permissions(manage_guild=True)
+    async def remove_notify(self, ctx: commands.Context):
+        if ctx.guild is None:
+            logging.warning("guild is None @resister_notify")
+            return
+
         await self.notify_role.delete_notify(ctx.guild.id)
-        await ctx.reply(f'{ctx.guild}の新規作成スレッドには今後自動参加しません', mention_author=False)
+        await ctx.reply(f"{ctx.guild}の新規作成スレッドには今後自動参加を行いません", mention_author=False)
 
+    '''
     @slash_command(name='keep_status_of_guild')
     @commands.has_permissions(ban_members=True)
     async def keep_status_of_guild(self, ctx):
@@ -268,6 +308,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         active_threads = await ctx.guild.active_threads()
 
         await ctx.respond("新スタッフの追加を開始します")
+        # len==0ならこっち側で止める
         await self.recall_of_thread(active_threads, ctx.guild.id)
         await ctx.respond("新スタッフの追加を終了しました")
 
