@@ -77,7 +77,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             return
 
         try:
-            await thread.edit(auto_archive_duration=1440)
+            await thread.edit(auto_archive_duration=10080)
         except discord.Forbidden:
             logging.error("Forbidden @ extend_archive_duration")
         except discord.HTTPException:
@@ -417,60 +417,83 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         # 低速モードを引き継ぎ
         if thread.parent is not None:
             try:
-                if thread.parent.slowmode_delay == 0:
-                    return
-                await thread.edit(slowmode_delay=thread.parent.slowmode_delay)
-                msg = await thread.send("低速モードを設定しました")
-                await self.c.delete_after(msg)
+                if thread.parent.slowmode_delay != 0:
+                    await thread.edit(slowmode_delay=thread.parent.slowmode_delay)
+                    msg = await thread.send("低速モードを設定しました")
+                    await self.c.delete_after(msg)
             except discord.Forbidden:
                 logging.error(f"Forbidden {thread} @ extend_archive_duration")
 
-    """
+        # フォーラムであり、タグに未解決がある場合、それをつける
+        if isinstance(thread.parent, discord.ForumChannel):
+            print(thread.parent.available_tags)
+            unsolved = discord.utils.get(thread.parent.available_tags, name="未解決")
+
+            if unsolved is not None and unsolved not in thread.applied_tags:
+                await thread.add_tags(unsolved)
+
     @commands.Cog.listener()
     async def on_thread_update(self, before: discord.Thread, after: discord.Thread):
         # 権限がないのであればスルーする
         if not after.permissions_for(after.guild.me).manage_threads:
+            logging.error(f"no permission to manage thread {after.name} of {after.guild.name} @ on_thread_update")
             return
 
         # 監視対象であるか？
         if await self.channel_data_manager.is_maintenance_channel(channel_id=after.id, guild_id=after.guild.id):
             if after.locked != before.locked:
-                await self.channel_data_manager.set_maintenance_channel(channel_id=after.id, guild_id=after.guild.id, tf=not after.archived)
+                await self.channel_data_manager.set_maintenance_channel(
+                    channel_id=after.id, guild_id=after.guild.id, tf=not after.archived
+                )
 
             # アーカイブされたらkeepをfalseに、解除されたらkeepをtrueにする
             if after.archived != before.archived:
-                await self.channel_data_manager.set_maintenance_channel(channel_id=after.id, guild_id=after.guild.id, tf=not after.archived)
+                await self.channel_data_manager.set_maintenance_channel(
+                    channel_id=after.id, guild_id=after.guild.id, tf=not after.archived
+                )
             # アーカイブ時間の設定変更時にDBも書き換える
             if after.archive_timestamp != before.archive_timestamp:
                 self.return_estimated_archive_time(after)
                 archive_time = self.return_estimated_archive_time(after)
-                await self.channel_data_manager.update_archived_time(channel_id=after.id, guild_id=after.guild.id, archive_time=archive_time)
+                await self.channel_data_manager.update_archived_time(
+                    channel_id=after.id, guild_id=after.guild.id, archive_time=archive_time
+                )
 
         if before.name != after.name:
             try:
-                await after.send(f"このチャンネル名が変更されました。\n{before.name}→{after.name}")
+                if isinstance(before.parent, discord.TextChannel):
+                    thread_kinds_name = "スレッド"
+                else:
+                    thread_kinds_name = "フォーラム"
+                await after.send(f"この{thread_kinds_name}チャンネル名が変更されました。\n{before.name}→{after.name}")
             except discord.Forbidden:
-                self.log_error(f"forbidden {after.name}")
+                logging.error(f"Forbidden {after.name} of {after.guild.name} @rename notify")
 
         if after.parent is None:
             return
 
         # ロックされたとき
         if before.locked != after.locked:
-            message = f"{after.name}は{'ロック' if after.locked else 'ロックが解除'}されました。"
-            try:
-                await after.parent.send(message)
-            except discord.Forbidden:
-                self.log_error(f"forbidden {after.name}")
-
+            if isinstance(after.parent, discord.TextChannel):
+                message = f"{after.name}は{'ロック' if after.locked else 'ロックが解除'}されました。"
+                try:
+                    await after.parent.send(message)
+                except discord.Forbidden:
+                    logging.error(f"Forbidden {after.name} of {after.guild.name} @lock notify")
             return
 
-            # アーカイブ状態に変化があった
+        # アーカイブ状態に変化があった
         if before.archived != after.archived:
+            # ForumChannelであるなら何もしない
+            if isinstance(after.parent, discord.ForumChannel):
+                return
             # アーカイブ通知を送る
             log = None
             try:
-                logs = await after.guild.audit_logs(limit=1).flatten()
+                logs = [
+                    entry
+                    async for entry in after.guild.audit_logs(limit=1, action=discord.AuditLogAction.thread_update)
+                ]
                 log = logs[0]
             except discord.Forbidden:
                 pass
@@ -484,33 +507,67 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             else:
                 message = f"{log.user}によって{after.name}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
 
-            if log is None or log.user.id != self.bot.user.id:
+            # logとlog.userとself.bot.userがNoneならreturn
+
+            if log is None:
+                return
+
+            if log.user is None:
+                return
+
+            if self.bot.user is None:
+                return
+
+            if log.user.id != self.bot.user.id:
                 try:
                     await after.parent.send(message)
                 except discord.Forbidden:
-                    print(message)
+                    logging.error(f"Forbidden {after.name} of {after.guild.name} @archive notify")
 
-            # アーカイブされた
-            if before.archived is False:
-                # ロックされていない
-                if after.locked is False:
-                    # ロックする
-                    await after.edit(archived=False)
-                    await after.edit(archived=True, locked=True)
+            # # アーカイブされた
+            # if before.archived is False:
+            #     # ロックされていない
+            #     if after.locked is False:
+            #         # ロックする
+            #         await after.edit(archived=False)
+            #         await after.edit(archived=True, locked=True)
+
+        # TODO: 未解決がついたらアーカイブする
+        # if isinstance(after.parent, discord.ForumChannel):
+        #     if after.applied_tags != before.applied_tags:
+        #         if set(after.applied_tags) - set(before.applied_tags) :
+        #         # 未解決がついた
+        #             if "未解決" not in before.applied_tags:
+        #                 if "未解決" in after.applied_tags:
+        #                     try:
+        #                         await after.send("このフォーラムに未解決がつきました。")
+        #                     except discord.Forbidden:
+        #                         logging.error(f"Forbidden {after.name} of {after.guild.name} @unsolved notify")
+
+        #         # 未解決が外された
+        #         if "未解決" in after.parent.available_tags:
+        #             if "未解決" in before.applied_tags:
+        #                 if "未解決" not in after.applied_tags:
+        #                     try:
+        #                         await after.send("このフォーラムに未解決が外されました。")
+        #                     except discord.Forbidden:
+        #                         logging.error(f"Forbidden {after.name} of {after.guild.name} @unsolved notify")
 
     @commands.Cog.listener()
     async def on_thread_delete(self, thread: discord.Thread):
         # 削除されたらDBから削除する
         if await self.channel_data_manager.is_exists(channel_id=thread.id, guild_id=thread.guild.id):
-            print(f'{thread.name}の情報を削除しました')
+            logging.info(f"delete {thread.name} of {thread.guild.name} from DB")
             await self.channel_data_manager.delete_channel(channel_id=thread.id, guild_id=thread.guild.id)
 
     # スレッドにcloseって投稿されたらアーカイブする
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if isinstance(message.channel, discord.Thread):
-            if message.clean_content.lower() == 'close':
-                await message.channel.edit(archived=True)
+            if message.clean_content.lower() != "close":
+                return
+
+            await message.channel.edit(archived=True)
 
     @tasks.loop(minutes=15.0)
     async def watch_dog(self):
@@ -518,30 +575,31 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         about_to_expire = await self.channel_data_manager.get_about_to_expire_channel()
         if about_to_expire is None:
             return
-        else:
-            for channel in about_to_expire:
-                guild = self.bot.get_guild(channel.guild_id)
-                if guild is None:
-                    continue
-                thread = guild.get_thread(channel.channel_id)
-                if thread is None:
-                    self.log_unfounded_thread(channel)
-                    await self.channel_data_manager.set_maintenance_channel(channel_id=channel.channel_id, guild_id=channel.guild_id, tf=False)
-                else:
-                    await self.extend_archive_duration(thread)
 
-                await asyncio.sleep(0.5)
+        for channel in about_to_expire:
+            guild = self.bot.get_guild(channel.guild_id)
+            if guild is None:
+                continue
+            thread = guild.get_thread(channel.channel_id)
+            if thread is None:
+                logging.warning(f"Thread {channel.channel_id} is not found in {guild.name}")
+                await self.channel_data_manager.set_maintenance_channel(
+                    channel_id=channel.channel_id, guild_id=channel.guild_id, tf=False
+                )
+                continue
+            await self.extend_archive_duration(thread)
+
+            await asyncio.sleep(0.5)
 
     @watch_dog.before_loop
     async def before_printer(self):
-        print('thread waiting...')
+        print("thread waiting...")
         await self.bot.wait_until_ready()
 
     @watch_dog.error
     async def watch_dog_error(self, error):
-        self.log_error(error)
+        logging.error(f"watch_dog error: {error}")
         return
-    """
 
 
 async def setup(bot):

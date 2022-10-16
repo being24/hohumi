@@ -1,10 +1,8 @@
 # !/usr/bin/env python3
 
 import asyncio
-import pathlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import re
 from typing import List, Optional
 
 from sqlalchemy import delete, exc, insert, select, update
@@ -13,8 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.schema import Column
-from sqlalchemy.types import (VARCHAR, BigInteger, Boolean, DateTime, Integer,
-                              String)
+from sqlalchemy.types import VARCHAR, BigInteger, Boolean, DateTime, Integer, String
 
 try:
     from .db import engine
@@ -33,20 +30,19 @@ class ChannelData:
 
 
 class ChannelDataDB(Base):
-    __tablename__ = 'channel_setting'
+    __tablename__ = "channel_setting"
     channel_id = Column(BigInteger, primary_key=True)  # channel_id
     guild_id = Column(BigInteger, primary_key=True)  # guild_id
     keep = Column(Boolean, default=True)  # keep
     archive_time = Column(DateTime, nullable=False)  # archive_time
 
 
-class ChannelDataManager():
+class ChannelDataManager:
     def __init__(self) -> None:
         pass
 
     async def create_table(self) -> None:
-        """テーブルを作成する関数
-        """
+        """テーブルを作成する関数"""
         async with engine.begin() as conn:
             await conn.run_sync(ChannelDataDB.metadata.create_all)
 
@@ -58,7 +54,7 @@ class ChannelDataManager():
             channel_id=db_data.channel_id,
             guild_id=db_data.guild_id,
             keep=db_data.keep,
-            archive_time=db_data.archive_time
+            archive_time=db_data.archive_time,
         )
 
         return processed_data
@@ -70,7 +66,7 @@ class ChannelDataManager():
             channel_id=db_data.channel_id,
             guild_id=db_data.guild_id,
             keep=db_data.keep,
-            archive_time=db_data.archive_time
+            archive_time=db_data.archive_time,
         )
 
         return processed_data
@@ -85,18 +81,12 @@ class ChannelDataManager():
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = insert(ChannelDataDB).values(
-                    channel_id=channel_id, guild_id=guild_id, archive_time=archive_time)
+                stmt = insert(ChannelDataDB).values(channel_id=channel_id, guild_id=guild_id, archive_time=archive_time)
 
                 do_update_stmt = stmt.on_conflict_do_update(
-                    index_elements=[
-                        'channel_id',
-                        'guild_id'],
-                    set_=dict(
-                        channel_id=channel_id,
-                        guild_id=guild_id,
-                        keep=True,
-                        archive_time=archive_time))
+                    index_elements=["channel_id", "guild_id"],
+                    set_=dict(channel_id=channel_id, guild_id=guild_id, keep=True, archive_time=archive_time),
+                )
                 await session.execute(do_update_stmt)
 
     async def is_maintenance_channel(self, channel_id: int, guild_id: int) -> bool:
@@ -111,11 +101,12 @@ class ChannelDataManager():
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = select(
-                    [ChannelDataDB]).where(
-                    ChannelDataDB.channel_id == channel_id).where(
-                    ChannelDataDB.guild_id == guild_id).where(
-                    ChannelDataDB.keep)
+                stmt = (
+                    select([ChannelDataDB])
+                    .where(ChannelDataDB.channel_id == channel_id)
+                    .where(ChannelDataDB.guild_id == guild_id)
+                    .where(ChannelDataDB.keep)
+                )
 
                 result = await session.execute(stmt)
                 result = result.fetchone()
@@ -136,9 +127,11 @@ class ChannelDataManager():
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = select([ChannelDataDB]).where(
-                    ChannelDataDB.channel_id == channel_id).where(
-                    ChannelDataDB.guild_id == guild_id)
+                stmt = (
+                    select([ChannelDataDB])
+                    .where(ChannelDataDB.channel_id == channel_id)
+                    .where(ChannelDataDB.guild_id == guild_id)
+                )
 
                 result = await session.execute(stmt)
                 result = result.fetchone()
@@ -148,7 +141,7 @@ class ChannelDataManager():
                     return True
 
     async def set_maintenance_channel(self, channel_id: int, guild_id: int, tf: bool) -> None:
-        """監視対象チャンネルを無効化する関数
+        """DBの保守設定を編集する関数
 
         Args:
             channel_id (int): チャンネルのID
@@ -157,10 +150,12 @@ class ChannelDataManager():
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = update(ChannelDataDB).where(
-                    ChannelDataDB.channel_id == channel_id).where(
-                    ChannelDataDB.guild_id == guild_id).values(
-                    keep=tf)
+                stmt = (
+                    update(ChannelDataDB)
+                    .where(ChannelDataDB.channel_id == channel_id)
+                    .where(ChannelDataDB.guild_id == guild_id)
+                    .values(keep=tf)
+                )
                 await session.execute(stmt)
 
     async def update_archived_time(self, channel_id: int, guild_id: int, archive_time: datetime) -> None:
@@ -173,10 +168,12 @@ class ChannelDataManager():
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = update(ChannelDataDB).where(
-                    ChannelDataDB.channel_id == channel_id).where(
-                    ChannelDataDB.guild_id == guild_id).values(
-                    archive_time=archive_time)
+                stmt = (
+                    update(ChannelDataDB)
+                    .where(ChannelDataDB.channel_id == channel_id)
+                    .where(ChannelDataDB.guild_id == guild_id)
+                    .values(archive_time=archive_time)
+                )
                 await session.execute(stmt)
 
     async def delete_channel(self, channel_id: int, guild_id: int) -> None:
@@ -188,16 +185,18 @@ class ChannelDataManager():
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = delete(ChannelDataDB).where(
-                    ChannelDataDB.channel_id == channel_id).where(
-                    ChannelDataDB.guild_id == guild_id)
+                stmt = (
+                    delete(ChannelDataDB)
+                    .where(ChannelDataDB.channel_id == channel_id)
+                    .where(ChannelDataDB.guild_id == guild_id)
+                )
                 await session.execute(stmt)
 
-    async def get_about_to_expire_channel(self, deltas: int = 4) -> Optional[List[ChannelData]]:
+    async def get_about_to_expire_channel(self, deltas: int = 24) -> Optional[List[ChannelData]]:
         """指定された時間以内に自動アーカイブされるチャンネルを取得する関数
 
         Args:
-            deltas (int, optional): 指定時間. Defaults to 2.
+            deltas (int, optional): 指定時間. Defaults to 24.
 
         Returns:
             Optional[List[ChannelData]]: アーカイブされそうなチャンネルのリスト
@@ -205,9 +204,7 @@ class ChannelDataManager():
         limen_time = datetime.now() + timedelta(hours=deltas)
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = select([ChannelDataDB]).where(
-                    ChannelDataDB.keep).where(
-                    ChannelDataDB.archive_time < limen_time)
+                stmt = select([ChannelDataDB]).where(ChannelDataDB.keep).where(ChannelDataDB.archive_time < limen_time)
 
                 result = await session.execute(stmt)
                 result = result.fetchall()
@@ -228,8 +225,7 @@ class ChannelDataManager():
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = select([ChannelDataDB]).where(
-                    ChannelDataDB.guild_id == guild_id)
+                stmt = select([ChannelDataDB]).where(ChannelDataDB.guild_id == guild_id)
                 result = await session.execute(stmt)
                 result = result.fetchall()
                 result = [self.return_dataclass(row) for row in result]
@@ -241,9 +237,11 @@ class ChannelDataManager():
     async def get_channel_data(self, channel_id: int, guild_id: int) -> Optional[ChannelData]:
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = select([ChannelDataDB]).where(
-                    ChannelDataDB.channel_id == channel_id).where(
-                    ChannelDataDB.guild_id == guild_id)
+                stmt = (
+                    select([ChannelDataDB])
+                    .where(ChannelDataDB.channel_id == channel_id)
+                    .where(ChannelDataDB.guild_id == guild_id)
+                )
                 result = await session.execute(stmt)
                 result = result.fetchone()
                 result = self.return_dataclass(result)
@@ -255,7 +253,6 @@ class ChannelDataManager():
 
 if __name__ == "__main__":
     setting_mng = ChannelDataManager()
-    result = asyncio.run(
-        setting_mng.is_maintenance_channel(channel_id=871010016000348171, guild_id=609058923353341973))
+    result = asyncio.run(setting_mng.is_maintenance_channel(channel_id=871010016000348171, guild_id=609058923353341973))
 
     print((result))
