@@ -44,7 +44,6 @@ class Admin(commands.Cog, name="管理用コマンド群"):
     @commands.command(aliases=["re"], hidden=True)
     async def reload(self, ctx):
         reloaded_list = []
-        print("!")
         for cog in self.master_path.glob("cogs/*.py"):
             try:
                 await self.bot.unload_extension(f"cogs.{cog.stem}")
@@ -54,7 +53,7 @@ class Admin(commands.Cog, name="管理用コマンド群"):
                 print(e)
                 await ctx.reply(e, mention_author=False)
 
-            await ctx.reply(f"{' '.join(reloaded_list)}をreloadしました", mention_author=False)
+        await ctx.reply(f"{' '.join(reloaded_list)}をreloadしました", mention_author=False)
 
     @commands.command(aliases=["st"], hidden=True)
     async def status(self, ctx, word: str = "Thread管理中"):
