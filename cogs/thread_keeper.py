@@ -370,7 +370,9 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         await interaction.response.send_message(f"{len(not_maintained_threads)}スレッドが非管理対象です")
         # not_maintained_threadsが0じゃなくて10以下ならメッセージを送る
-        if 0 < len(not_maintained_threads) <= 10:
+        if len(not_maintained_threads) == 0:
+            pass
+        elif 0 < len(not_maintained_threads) <= 10:
             for thread in not_maintained_threads:
                 await interaction.followup.send(f"{thread.name} {thread.id}")
         # 多すぎたら省略する旨を送る
