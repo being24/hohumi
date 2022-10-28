@@ -395,7 +395,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         for thread in threads:
             if not await self.channel_data_manager.is_maintenance_channel(thread.id, guild_id=interaction.guild.id):
                 not_maintained_threads.append(thread)
-                self.logger.error(f"{thread.name} @ maintain_all_threads")
+                self.logger.error(f"{thread.name} not in database @ maintain_all_threads")
 
         for thread in not_maintained_threads:
             archive_time = self.return_estimated_archive_time(thread)
