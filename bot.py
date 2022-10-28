@@ -45,6 +45,8 @@ if __name__ == "__main__":
     token = getenv("DISCORD_BOT_TOKEN")
     dsn = getenv("SENTRY_DSN")
 
+    logfile_path = pathlib.Path(__file__).parents[0] / "log" / "discord.log"
+
     if token is None:
         raise FileNotFoundError("Token not found error!")
     if dsn is None:
@@ -60,7 +62,7 @@ if __name__ == "__main__":
     logging.getLogger("discord.http").setLevel(logging.INFO)
 
     handler = logging.handlers.RotatingFileHandler(
-        filename=r"log/discord.log",
+        filename=logfile_path,
         encoding="utf-8",
         maxBytes=32 * 1024,  # 32 KiB
         backupCount=5,  # Rotate through 5 files
