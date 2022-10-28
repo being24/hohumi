@@ -34,7 +34,7 @@ class MyBot(commands.Bot):
             print(self.user.name)
             print(self.user.id)
         print("------")
-        logging.warning("rebooted")
+        logger.warning("rebooted")
         await bot.change_presence(activity=discord.Game(name="Thread管理中"))
 
 
@@ -51,13 +51,13 @@ if __name__ == "__main__":
         raise FileNotFoundError("dsn not found error!")
 
     sentry_logging = LoggingIntegration(
-        level=logging.WARNING,  # Capture info and above as breadcrumbs
-        event_level=logging.WARNING,  # Send errors as events
+        level=logging.INFO,  # Capture info and above as breadcrumbs
+        event_level=logging.INFO,  # Send errors as events
     )
 
     logger = logging.getLogger("discord")
-    logger.setLevel(logging.WARNING)
-    logging.getLogger("discord.http").setLevel(logging.WARNING)
+    logger.setLevel(logging.INFO)
+    logging.getLogger("discord.http").setLevel(logging.INFO)
 
     handler = logging.handlers.RotatingFileHandler(
         filename=r"log/discord.log",

@@ -28,6 +28,8 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         self.channel_data_manager = ChannelDataManager()
         self.notify_role = NotifySettingManager()
 
+        self.logger = logging.getLogger("discord")
+
     async def setup_hook(self):
         # self.bot.tree.copy_global_to(guild=MY_GUILD)
         pass
@@ -44,8 +46,8 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         await self.bot.tree.sync()
 
-        # self.watch_dog.stop()
-        # self.watch_dog.start()
+        self.watch_dog.stop()
+        self.watch_dog.start()
 
     # @commands.Cog.listener()
     # async def on_message(self, message: discord.Message):
@@ -64,11 +66,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             channel (discord.Thread): 対象のスレッド
         """
 
-        # とりあえず60mに指定する、もしも60mになっていたら1440mにする
-        if thread.auto_archive_duration != 60:
-            tmp_archive_duration = 60
-        else:
-            tmp_archive_duration = 1440
+        tmp_archive_duration = 60
 
         await thread.edit(auto_archive_duration=tmp_archive_duration)
         await asyncio.sleep(10)
@@ -79,11 +77,11 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         try:
             await thread.edit(auto_archive_duration=10080)
         except discord.Forbidden:
-            logging.error("Forbidden @ extend_archive_duration")
+            self.logger.error("Forbidden @ extend_archive_duration")
         except discord.HTTPException:
-            logging.error("HTTPException @ extend_archive_duration")
+            self.logger.error("HTTPException @ extend_archive_duration")
         except BaseException:
-            logging.error("BaseException @ extend_archive_duration")
+            self.logger.error("BaseException @ extend_archive_duration")
 
     async def add_staff_to_thread(self, thread: discord.Thread):
         """スレッドにスタッフを追加する関数
@@ -124,12 +122,12 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         guild = threads[0].guild
         if guild is None:
-            logging.warning("guild is None @readd_staff_to_thread")
+            self.logger.warning("guild is None @readd_staff_to_thread")
             return
 
         role_ids = await self.notify_role.return_notified(guild.id)
         if role_ids is None:
-            logging.info("function return due to role_ids is None @readd_staff_to_thread")
+            self.logger.info("function return due to role_ids is None @readd_staff_to_thread")
             return
 
         content = ""
@@ -173,7 +171,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             return
 
         if interaction.guild is None:
-            logging.warning("guild is None @resister_notify")
+            self.logger.warning("guild is None @resister_notify")
             return
 
         if tf:
@@ -222,7 +220,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             return
 
         if interaction.guild is None:
-            logging.warning("guild is None @resister_notify")
+            self.logger.warning("guild is None @resister_notify")
             return
         # DBの設定を書き換える
         await self.guild_setting_mng.set_full_maintenance(interaction.guild.id, tf)
@@ -247,7 +245,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         role_mentions = ",".join(role_mentions)
 
         if ctx.guild is None:
-            logging.warning("guild is None @resister_notify")
+            self.logger.warning("guild is None @resister_notify")
             return
 
         await self.notify_role.resister_notify(ctx.guild.id, role_ids)
@@ -262,7 +260,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
     @commands.guild_only()
     async def remove_notify(self, ctx: commands.Context):
         if ctx.guild is None:
-            logging.warning("guild is None @resister_notify")
+            self.logger.warning("guild is None @resister_notify")
             return
 
         await self.notify_role.delete_notify(ctx.guild.id)
@@ -275,7 +273,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         """サーバーのスレッドの設定を確認するコマンド"""
 
         if interaction.guild is None:
-            logging.warning("guild is None @thread_keep_status")
+            self.logger.warning("guild is None @thread_keep_status")
             return
 
         guild_setting = await self.guild_setting_mng.get_guild_setting(interaction.guild.id)
@@ -319,7 +317,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             return
 
         if interaction.guild is None:
-            logging.warning("guild is None @thread_status")
+            self.logger.warning("guild is None @thread_status")
             return
 
         result = await self.channel_data_manager.is_maintenance_channel(
@@ -336,7 +334,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
     async def join_new_staff_to_exist_thread(self, interaction: discord.Interaction):
         """既存スレッドに新規スタッフを参加させるコマンド"""
         if interaction.guild is None:
-            logging.warning("guild is None @join_new_staff_to_exist_thread")
+            self.logger.warning("guild is None @join_new_staff_to_exist_thread")
             return
 
         active_threads = await interaction.guild.active_threads()
@@ -361,7 +359,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         """管理対象になっていないスレッドの数を表示するコマンド"""
 
         if interaction.guild is None:
-            logging.warning("guild is None @list_active_threads")
+            self.logger.warning("guild is None @list_active_threads")
             return
 
         threads = await interaction.guild.active_threads()
@@ -371,6 +369,9 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                 not_maintained_threads.append(thread)
 
         await interaction.response.send_message(f"{len(not_maintained_threads)}スレッドが非管理対象です")
+        if not len(not_maintained_threads) == 0:
+            for thread in not_maintained_threads:
+                await interaction.followup.send(f"{thread.name} {thread.id}")
 
     @app_commands.command(name="maintain_all_threads", description="このサーバーの全てのスレッドを保守します")
     @app_commands.default_permissions(manage_guild=True)
@@ -378,11 +379,11 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
     async def maintain_all_threads(self, interaction: discord.Interaction):
         """このサーバーのすべてのスレッドを管理対象にするコマンド"""
         if interaction.guild is None:
-            logging.warning("guild is None @maintain_all_threads")
+            self.logger.warning("guild is None @maintain_all_threads")
             return
 
         if interaction.channel is None:
-            logging.warning("channel is None @maintain_all_threads")
+            self.logger.warning("channel is None @maintain_all_threads")
             return
 
         threads = await interaction.guild.active_threads()
@@ -390,12 +391,12 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         for thread in threads:
             if not await self.channel_data_manager.is_maintenance_channel(thread.id, guild_id=interaction.guild.id):
                 not_maintained_threads.append(thread)
-                logging.error(f"{thread.name} @ maintain_all_threads")
+                self.logger.error(f"{thread.name} @ maintain_all_threads")
 
         for thread in not_maintained_threads:
             archive_time = self.return_estimated_archive_time(thread)
             await self.channel_data_manager.resister_channel(
-                channel_id=interaction.channel.id, guild_id=interaction.guild.id, archive_time=archive_time
+                channel_id=thread.id, guild_id=interaction.guild.id, archive_time=archive_time
             )
 
         await interaction.response.send_message(f"{len(not_maintained_threads)}スレッドを管理対象に設定しました")
@@ -422,7 +423,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                     msg = await thread.send("低速モードを設定しました")
                     await self.c.delete_after(msg)
             except discord.Forbidden:
-                logging.error(f"Forbidden {thread} @ extend_archive_duration")
+                self.logger.error(f"Forbidden {thread} @ extend_archive_duration")
 
         # フォーラムであり、タグに未解決がある場合、それをつける
         if isinstance(thread.parent, discord.ForumChannel):
@@ -432,11 +433,13 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             if unsolved is not None and unsolved not in thread.applied_tags:
                 await thread.add_tags(unsolved)
 
+    # todo:せんぶ変える的なコマンドを作る
     @commands.Cog.listener()
     async def on_thread_update(self, before: discord.Thread, after: discord.Thread):
+        # closeされたときに復活させるか？
         # 権限がないのであればスルーする
         if not after.permissions_for(after.guild.me).manage_threads:
-            logging.error(f"no permission to manage thread {after.name} of {after.guild.name} @ on_thread_update")
+            self.logger.error(f"no permission to manage thread {after.name} of {after.guild.name} @ on_thread_update")
             return
 
         # 監視対象であるか？
@@ -467,7 +470,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                     thread_kinds_name = "フォーラム"
                 await after.send(f"この{thread_kinds_name}チャンネル名が変更されました。\n{before.name}→{after.name}")
             except discord.Forbidden:
-                logging.error(f"Forbidden {after.name} of {after.guild.name} @rename notify")
+                self.logger.error(f"Forbidden {after.name} of {after.guild.name} @rename notify")
 
         if after.parent is None:
             return
@@ -479,7 +482,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                 try:
                     await after.parent.send(message)
                 except discord.Forbidden:
-                    logging.error(f"Forbidden {after.name} of {after.guild.name} @lock notify")
+                    self.logger.error(f"Forbidden {after.name} of {after.guild.name} @lock notify")
             return
 
         # アーカイブ状態に変化があった
@@ -522,7 +525,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                 try:
                     await after.parent.send(message)
                 except discord.Forbidden:
-                    logging.error(f"Forbidden {after.name} of {after.guild.name} @archive notify")
+                    self.logger.error(f"Forbidden {after.name} of {after.guild.name} @archive notify")
 
             # # アーカイブされた
             # if before.archived is False:
@@ -532,7 +535,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             #         await after.edit(archived=False)
             #         await after.edit(archived=True, locked=True)
 
-        # TODO: 未解決がついたらアーカイブする
+        # TODO: 解決がついたらアーカイブする
         # if isinstance(after.parent, discord.ForumChannel):
         #     if after.applied_tags != before.applied_tags:
         #         if set(after.applied_tags) - set(before.applied_tags) :
@@ -542,7 +545,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         #                     try:
         #                         await after.send("このフォーラムに未解決がつきました。")
         #                     except discord.Forbidden:
-        #                         logging.error(f"Forbidden {after.name} of {after.guild.name} @unsolved notify")
+        #                         self.logger.error(f"Forbidden {after.name} of {after.guild.name} @unsolved notify")
 
         #         # 未解決が外された
         #         if "未解決" in after.parent.available_tags:
@@ -551,13 +554,13 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         #                     try:
         #                         await after.send("このフォーラムに未解決が外されました。")
         #                     except discord.Forbidden:
-        #                         logging.error(f"Forbidden {after.name} of {after.guild.name} @unsolved notify")
+        #                         self.logger.error(f"Forbidden {after.name} of {after.guild.name} @unsolved notify")
 
     @commands.Cog.listener()
     async def on_thread_delete(self, thread: discord.Thread):
         # 削除されたらDBから削除する
         if await self.channel_data_manager.is_exists(channel_id=thread.id, guild_id=thread.guild.id):
-            logging.info(f"delete {thread.name} of {thread.guild.name} from DB")
+            self.logger.info(f"delete {thread.name} of {thread.guild.name} from DB")
             await self.channel_data_manager.delete_channel(channel_id=thread.id, guild_id=thread.guild.id)
 
     # スレッドにcloseって投稿されたらアーカイブする
@@ -568,6 +571,10 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                 return
 
             await message.channel.edit(archived=True)
+
+        if not self.watch_dog.is_running():
+            self.logger.warning("watch_dog is not running!")
+            self.watch_dog.start()
 
     @tasks.loop(minutes=15.0)
     async def watch_dog(self):
@@ -582,7 +589,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                 continue
             thread = guild.get_thread(channel.channel_id)
             if thread is None:
-                logging.warning(f"Thread {channel.channel_id} is not found in {guild.name}")
+                self.logger.warning(f"Thread {channel.channel_id} is not found in {guild.name}")
                 await self.channel_data_manager.set_maintenance_channel(
                     channel_id=channel.channel_id, guild_id=channel.guild_id, tf=False
                 )
@@ -598,7 +605,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
     @watch_dog.error
     async def watch_dog_error(self, error):
-        logging.error(f"watch_dog error: {error}")
+        self.logger.error(f"watch_dog error: {error}")
         return
 
 
