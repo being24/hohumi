@@ -369,9 +369,13 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                 not_maintained_threads.append(thread)
 
         await interaction.response.send_message(f"{len(not_maintained_threads)}スレッドが非管理対象です")
-        if not len(not_maintained_threads) == 0:
+        # not_maintained_threadsが0じゃなくて10以下ならメッセージを送る
+        if 0 < len(not_maintained_threads) <= 10:
             for thread in not_maintained_threads:
                 await interaction.followup.send(f"{thread.name} {thread.id}")
+        # 多すぎたら省略する旨を送る
+        else:
+            await interaction.followup.send("10以上であるため省略します")
 
     @app_commands.command(name="maintain_all_threads", description="このサーバーの全てのスレッドを保守します")
     @app_commands.default_permissions(manage_guild=True)
