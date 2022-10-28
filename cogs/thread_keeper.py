@@ -521,11 +521,10 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             if self.bot.user is None:
                 return
 
-            if log.user.id != self.bot.user.id:
-                try:
-                    await after.parent.send(message)
-                except discord.Forbidden:
-                    self.logger.error(f"Forbidden {after.name} of {after.guild.name} @archive notify")
+            try:
+                await after.parent.send(message)
+            except discord.Forbidden:
+                self.logger.error(f"Forbidden {after.name} of {after.guild.name} @archive notify")
 
             # # アーカイブされた
             # if before.archived is False:
