@@ -370,7 +370,9 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         await interaction.response.send_message(f"{len(not_maintained_threads)}スレッドが非管理対象です")
         # not_maintained_threadsが0じゃなくて10以下ならメッセージを送る
-        if 0 < len(not_maintained_threads) <= 10:
+        if len(not_maintained_threads) == 0:
+            pass
+        elif 0 < len(not_maintained_threads) <= 10:
             for thread in not_maintained_threads:
                 await interaction.followup.send(f"{thread.name} {thread.id}")
         # 多すぎたら省略する旨を送る
@@ -395,7 +397,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         for thread in threads:
             if not await self.channel_data_manager.is_maintenance_channel(thread.id, guild_id=interaction.guild.id):
                 not_maintained_threads.append(thread)
-                self.logger.error(f"{thread.name} @ maintain_all_threads")
+                self.logger.error(f"{thread.name} not in database @ maintain_all_threads")
 
         for thread in not_maintained_threads:
             archive_time = self.return_estimated_archive_time(thread)
@@ -431,11 +433,15 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         # フォーラムであり、タグに未解決がある場合、それをつける
         if isinstance(thread.parent, discord.ForumChannel):
-            print(thread.parent.available_tags)
             unsolved = discord.utils.get(thread.parent.available_tags, name="未解決")
 
             if unsolved is not None and unsolved not in thread.applied_tags:
                 await thread.add_tags(unsolved)
+
+            # 対応待ちがタグがあったらそれをつける
+            waiting = discord.utils.get(thread.parent.available_tags, name="対応待ち")
+            if waiting is not None and waiting not in thread.applied_tags:
+                await thread.add_tags(waiting)
 
     # todo:せんぶ変える的なコマンドを作る
     @commands.Cog.listener()
