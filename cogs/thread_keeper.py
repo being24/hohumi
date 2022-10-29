@@ -433,11 +433,15 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         # フォーラムであり、タグに未解決がある場合、それをつける
         if isinstance(thread.parent, discord.ForumChannel):
-            print(thread.parent.available_tags)
             unsolved = discord.utils.get(thread.parent.available_tags, name="未解決")
 
             if unsolved is not None and unsolved not in thread.applied_tags:
                 await thread.add_tags(unsolved)
+
+            # 対応待ちがタグがあったらそれをつける
+            waiting = discord.utils.get(thread.parent.available_tags, name="対応待ち")
+            if waiting is not None and waiting not in thread.applied_tags:
+                await thread.add_tags(waiting)
 
     # todo:せんぶ変える的なコマンドを作る
     @commands.Cog.listener()
