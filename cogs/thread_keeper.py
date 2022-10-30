@@ -12,8 +12,6 @@ from .utils.guild_setting import GuildSettingManager
 from .utils.notify_role import NotifySettingManager
 from .utils.thread_channels import ChannelData, ChannelDataManager
 
-MY_GUILD = discord.Object(id=609058923353341973)
-
 
 class Hofumi(commands.Cog, name="Thread管理用cog"):
     """
