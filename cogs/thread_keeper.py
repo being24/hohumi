@@ -470,15 +470,18 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                     channel_id=after.id, guild_id=after.guild.id, archive_time=archive_time
                 )
 
+        # 名前が変更された時
         if before.name != after.name:
-            try:
-                if isinstance(before.parent, discord.TextChannel):
-                    thread_kinds_name = "スレッド"
-                else:
-                    thread_kinds_name = "フォーラム"
-                await after.send(f"この{thread_kinds_name}チャンネル名が変更されました。\n{before.name}→{after.name}")
-            except discord.Forbidden:
-                self.logger.error(f"Forbidden {after.name} of {after.guild.name} @rename notify")
+            # archiveされている場合は通知を送信しない
+            if not after.archived:
+                try:
+                    if isinstance(before.parent, discord.TextChannel):
+                        thread_kinds_name = "スレッド"
+                    else:
+                        thread_kinds_name = "フォーラム"
+                    await after.send(f"この{thread_kinds_name}チャンネル名が変更されました。\n{before.name}→{after.name}")
+                except discord.Forbidden:
+                    self.logger.error(f"Forbidden {after.name} of {after.guild.name} @rename notify")
 
         if after.parent is None:
             return
@@ -533,6 +536,10 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                 await after.parent.send(message)
             except discord.Forbidden:
                 self.logger.error(f"Forbidden {after.name} of {after.guild.name} @archive notify")
+
+            # アーカイブ時間が変更されたとき、[CLOSED]がついていれば、外す
+            if not after.archived:
+                await after.edit(name=f"{after.name.replace('[CLOSED]', '')}", archived=False)
 
             # # アーカイブされた
             # if before.archived is False:
