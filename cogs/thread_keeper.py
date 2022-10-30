@@ -579,7 +579,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             if message.clean_content.lower() != "close":
                 return
 
-            await message.channel.edit(archived=True)
+            await message.channel.edit(name=f"[CLOSED]{message.channel.name}", archived=True)
 
         if not self.watch_dog.is_running():
             self.logger.warning("watch_dog is not running!")
