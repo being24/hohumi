@@ -30,6 +30,8 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         self.logger = logging.getLogger("discord")
 
+        self.closed_thread_prefix = "[CLOSED]"
+
     async def setup_hook(self):
         # self.bot.tree.copy_global_to(guild=MY_GUILD)
         pass
@@ -474,11 +476,14 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         if before.name != after.name:
             try:
-                if isinstance(before.parent, discord.TextChannel):
-                    thread_kinds_name = "スレッド"
-                else:
-                    thread_kinds_name = "フォーラム"
-                await after.send(f"この{thread_kinds_name}チャンネル名が変更されました。\n{before.name}→{after.name}")
+                # close prefixの付け外しだった場合は何もしない
+                if not ((self.closed_thread_prefix not in before.name and self.closed_thread_prefix in after.name)
+                        or (self.closed_thread_prefix in before.name and self.closed_thread_prefix not in after.name)):
+                    if isinstance(before.parent, discord.TextChannel):
+                        thread_kinds_name = "スレッド"
+                    else:
+                        thread_kinds_name = "フォーラム"
+                    await after.send(f"この{thread_kinds_name}チャンネル名が変更されました。\n{before.name}→{after.name}")
             except discord.Forbidden:
                 self.logger.error(f"Forbidden {after.name} of {after.guild.name} @rename notify")
 
@@ -572,14 +577,20 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             self.logger.info(f"delete {thread.name} of {thread.guild.name} from DB")
             await self.channel_data_manager.delete_channel(channel_id=thread.id, guild_id=thread.guild.id)
 
-    # スレッドにcloseって投稿されたらアーカイブする
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if isinstance(message.channel, discord.Thread):
-            if message.clean_content.lower() != "close":
-                return
+            # スレッドにcloseって投稿されたらアーカイブする
+            if message.clean_content.lower() == "close":
+                if self.closed_thread_prefix not in message.channel.name:
+                    await message.channel.edit(name=f"{self.closed_thread_prefix}{message.channel.name}")
 
-            await message.channel.edit(name=f"[CLOSED]{message.channel.name}", archived=True)
+                await message.channel.edit(archived=True)
+            else:
+                # 過去にclose宣言されたスレッドに書き込みがあったらスレッド名を戻す
+                if self.closed_thread_prefix in message.channel.name and message.author != self.bot.user:
+                    await message.channel.edit(archived=False)
+                    await message.channel.edit(name=message.channel.name.replace(self.closed_thread_prefix, ""))
 
         if not self.watch_dog.is_running():
             self.logger.warning("watch_dog is not running!")
