@@ -63,7 +63,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             今指定されている時間以外の時間を指定して、その後に1wにすることでサイレントに延長する
 
         Args:
-            channel (discord.Thread): 対象のスレッド
+            thread (discord.Thread): 対象のスレッド
         """
 
         tmp_archive_duration = 60
@@ -110,7 +110,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         await msg.edit(content=f"{content} {msg.content}")
 
-    async def readd_staff_to_thread(self, threads: List[discord.Thread]) -> None:
+    async def read_staff_to_thread(self, threads: List[discord.Thread]) -> None:
         """スレッドに新スタッフを追加する関数
 
         Args:
@@ -349,7 +349,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             return
 
         await interaction.response.send_message("新スタッフの追加を開始します")
-        await self.readd_staff_to_thread(active_threads)
+        await self.read_staff_to_thread(active_threads)
         await interaction.followup.send("新スタッフの追加を終了しました")
 
     @app_commands.command(name="list_unkept_threads", description="保守していないスレッドの数を表示します")
@@ -579,7 +579,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             if message.clean_content.lower() != "close":
                 return
 
-            await message.channel.edit(archived=True)
+            await message.channel.edit(name=f"[CLOSED]{message.channel.name}", archived=True)
 
         if not self.watch_dog.is_running():
             self.logger.warning("watch_dog is not running!")
