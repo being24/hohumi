@@ -12,8 +12,6 @@ from .utils.guild_setting import GuildSettingManager
 from .utils.notify_role import NotifySettingManager
 from .utils.thread_channels import ChannelData, ChannelDataManager
 
-MY_GUILD = discord.Object(id=609058923353341973)
-
 
 class Hofumi(commands.Cog, name="Thread管理用cog"):
     """
@@ -474,16 +472,20 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                     channel_id=after.id, guild_id=after.guild.id, archive_time=archive_time
                 )
 
+        # 名前が変更された時
         if before.name != after.name:
             try:
-                # close prefixの付け外しだった場合は何もしない
+                # close prefixの付け外だった場合 or archiveされている場合は何もしない
                 if not ((self.closed_thread_prefix not in before.name and self.closed_thread_prefix in after.name)
-                        or (self.closed_thread_prefix in before.name and self.closed_thread_prefix not in after.name)):
+                        or (self.closed_thread_prefix in before.name and self.closed_thread_prefix not in after.name))\
+                   or after.archived:
+
                     if isinstance(before.parent, discord.TextChannel):
                         thread_kinds_name = "スレッド"
                     else:
                         thread_kinds_name = "フォーラム"
                     await after.send(f"この{thread_kinds_name}チャンネル名が変更されました。\n{before.name}→{after.name}")
+                    
             except discord.Forbidden:
                 self.logger.error(f"Forbidden {after.name} of {after.guild.name} @rename notify")
 
@@ -540,6 +542,10 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                 await after.parent.send(message)
             except discord.Forbidden:
                 self.logger.error(f"Forbidden {after.name} of {after.guild.name} @archive notify")
+
+            # アーカイブ時間が変更されたとき、[CLOSED]がついていれば、外す
+            if not after.archived:
+                await after.edit(name=f"{after.name.replace('[CLOSED]', '')}", archived=False)
 
             # # アーカイブされた
             # if before.archived is False:
