@@ -5,7 +5,7 @@ services:
     image: "ghcr.io/being24/hohumi:latest"
     volumes:
       - ./hohumi-data:/opt/hohumi/data
-      - ./hhohumi-log:/opt/hohumi/log
+      - ./hohumi-log:/opt/hohumi/log
     env_file:
       - ./.env
     restart: always
