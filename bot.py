@@ -49,13 +49,6 @@ if __name__ == "__main__":
 
     if token is None:
         raise FileNotFoundError("Token not found error!")
-    if dsn is None:
-        raise FileNotFoundError("dsn not found error!")
-
-    sentry_logging = LoggingIntegration(
-        level=logging.WARNING,  # Capture info and above as breadcrumbs
-        event_level=logging.WARNING,  # Send errors as events
-    )
 
     logger = logging.getLogger("discord")
     logger.setLevel(logging.WARNING)
@@ -82,5 +75,12 @@ if __name__ == "__main__":
 
     bot = MyBot(command_prefix=commands.when_mentioned_or("/"))
 
-    use_sentry(bot, dsn=dsn, integrations=[AioHttpIntegration(), sentry_logging])
+    if dsn is not None:
+        sentry_logging = LoggingIntegration(
+            level=logging.WARNING,  # Capture info and above as breadcrumbs
+            event_level=logging.WARNING,  # Send errors as events
+        )
+
+        use_sentry(bot, dsn=dsn, integrations=[AioHttpIntegration(), sentry_logging])
+
     bot.run(token, log_handler=handler)
