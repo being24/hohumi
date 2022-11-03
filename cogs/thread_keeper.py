@@ -49,15 +49,6 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         self.watch_dog.stop()
         self.watch_dog.start()
 
-    # @commands.Cog.listener()
-    # async def on_message(self, message: discord.Message):
-    #     print(message.content)
-
-    @app_commands.command()
-    async def hello(self, interaction: discord.Interaction):
-        """Says hello!"""
-        await interaction.response.send_message(f"Hi, {interaction.user.mention}")
-
     async def extend_archive_duration(self, thread: discord.Thread):
         """チャンネルのArchive時間を延長する関数
             今指定されている時間以外の時間を指定して、その後に1wにすることでサイレントに延長する
@@ -476,16 +467,20 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         if before.name != after.name:
             try:
                 # close prefixの付け外だった場合 or archiveされている場合は何もしない
-                if not ((self.closed_thread_prefix not in before.name and self.closed_thread_prefix in after.name)
-                        or (self.closed_thread_prefix in before.name and self.closed_thread_prefix not in after.name))\
-                   or after.archived:
+                if (
+                    not (
+                        (self.closed_thread_prefix not in before.name and self.closed_thread_prefix in after.name)
+                        or (self.closed_thread_prefix in before.name and self.closed_thread_prefix not in after.name)
+                    )
+                    or after.archived
+                ):
 
                     if isinstance(before.parent, discord.TextChannel):
                         thread_kinds_name = "スレッド"
                     else:
                         thread_kinds_name = "フォーラム"
                     await after.send(f"この{thread_kinds_name}チャンネル名が変更されました。\n{before.name}→{after.name}")
-                    
+
             except discord.Forbidden:
                 self.logger.error(f"Forbidden {after.name} of {after.guild.name} @rename notify")
 
