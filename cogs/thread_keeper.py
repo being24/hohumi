@@ -518,9 +518,9 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                     log = None
 
             if log is None:
-                message = f"{after.name}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
+                message = f"{after.name}は{'閉架' if after.archived else '閉架が解除'}されました。"
             else:
-                message = f"{log.user}によって{after.name}は{'アーカイブ' if after.archived else 'アーカイブが解除'}されました。"
+                message = f"{log.user}によって{after.name}は{'閉架' if after.archived else '閉架が解除'}されました。"
 
             # logとlog.userとself.bot.userがNoneならreturn
 
