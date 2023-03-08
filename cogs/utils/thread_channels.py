@@ -141,7 +141,7 @@ class ChannelDataManager:
                     return True
 
     async def set_maintenance_channel(self, channel_id: int, guild_id: int, tf: bool) -> None:
-        """DBの保守設定を編集する関数
+        """チャンネルの保守設定を編集する関数
 
         Args:
             channel_id (int): チャンネルのID
