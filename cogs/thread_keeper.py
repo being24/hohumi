@@ -61,12 +61,12 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         try:
             await thread.edit(auto_archive_duration=tmp_archive_duration)
-        except discord.Forbidden:
-            self.logger.error(f"Forbidden @ extend_archive_duration @{thread.id}")
-        except discord.HTTPException:
-            self.logger.error(f"HTTPException @ extend_archive_duration @{thread.id}")
-        except BaseException:
-            self.logger.error(f"BaseException @ extend_archive_duration @{thread.id}")
+        except (discord.Forbidden, discord.HTTPException, BaseException):
+            self.logger.error(f"Forbidden @ extend_archive_duration @{thread.id} stop maintenance")
+            # 該当のスレッドの管理を辞める
+            await self.channel_data_manager.set_maintenance_channel(
+                channel_id=thread.id, guild_id=thread.guild.id, tf=False
+            )
 
         await asyncio.sleep(10)
 
@@ -75,12 +75,11 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         try:
             await thread.edit(auto_archive_duration=10080)
-        except discord.Forbidden:
-            self.logger.error("Forbidden @ extend_archive_duration")
-        except discord.HTTPException:
-            self.logger.error("HTTPException @ extend_archive_duration")
-        except BaseException:
-            self.logger.error("BaseException @ extend_archive_duration")
+        except (discord.Forbidden, discord.HTTPException, BaseException):
+            self.logger.error(f"Forbidden @ extend_archive_duration @{thread.id} stop maintenance")
+            await self.channel_data_manager.set_maintenance_channel(
+                channel_id=thread.id, guild_id=thread.guild.id, tf=False
+            )
 
     async def add_staff_to_thread(self, thread: discord.Thread):
         """スレッドにスタッフを追加する関数
