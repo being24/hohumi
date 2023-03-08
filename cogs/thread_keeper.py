@@ -59,7 +59,15 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         tmp_archive_duration = 60
 
-        await thread.edit(auto_archive_duration=tmp_archive_duration)
+        try:
+            await thread.edit(auto_archive_duration=tmp_archive_duration)
+        except discord.Forbidden:
+            self.logger.error(f"Forbidden @ extend_archive_duration @{thread.id}")
+        except discord.HTTPException:
+            self.logger.error(f"HTTPException @ extend_archive_duration @{thread.id}")
+        except BaseException:
+            self.logger.error(f"BaseException @ extend_archive_duration @{thread.id}")
+
         await asyncio.sleep(10)
 
         if thread.archived:

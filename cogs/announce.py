@@ -25,10 +25,17 @@ class MyModal(commands.Cog, name="Modal管理用cog"):
         )
         self.bot.tree.add_command(self.ctx_menu)
 
-    @app_commands.command(name="proxy_transmission", description="代理投稿を行うコマンド")
+    # TODO: エラーハンドリングを追加する
+    @app_commands.command(name="proxy_transmission")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
-    async def proxy_transmission(self, interaction: discord.Interaction):
+    async def proxy_transmission(self, interaction: discord.Interaction, test: bool = False):
+        """代理投稿を行うコマンド
+
+        Args:
+            test (bool, optional): てすと. Defaults to False.
+        """
+
         class ProxyModal(Modal, title="代理投稿を行います"):
             answer = TextInput(label="Input", style=discord.TextStyle.paragraph)
 
