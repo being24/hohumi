@@ -128,12 +128,13 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-
-.vscode/
+!.vscode/*.code-snippets
+.vscode/*.json
 *.csv
 *.ini
 token
 *.json
+!.devcontainer/devcontainer.json
 !pyrightconfig.json
 *.sqlite3
 *.ipynb
