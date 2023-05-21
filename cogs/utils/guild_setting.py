@@ -108,7 +108,7 @@ class GuildSettingManager:
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = select([GuildSettingDB.keep_all]).where(GuildSettingDB.guild_id == guild_id)
+                stmt = select(GuildSettingDB.keep_all).where(GuildSettingDB.guild_id == guild_id)
                 result = await session.execute(stmt)
                 result = result.fetchone()
                 result = result[0]
@@ -125,7 +125,7 @@ class GuildSettingManager:
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = select([GuildSettingDB]).where(GuildSettingDB.guild_id == guild_id)
+                stmt = select(GuildSettingDB).where(GuildSettingDB.guild_id == guild_id)
                 result = await session.execute(stmt)
                 result = result.fetchone()
                 if result is None:

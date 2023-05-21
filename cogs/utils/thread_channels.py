@@ -102,7 +102,7 @@ class ChannelDataManager:
         async with AsyncSession(engine) as session:
             async with session.begin():
                 stmt = (
-                    select([ChannelDataDB])
+                    select(ChannelDataDB)
                     .where(ChannelDataDB.channel_id == channel_id)
                     .where(ChannelDataDB.guild_id == guild_id)
                     .where(ChannelDataDB.keep)
@@ -128,7 +128,7 @@ class ChannelDataManager:
         async with AsyncSession(engine) as session:
             async with session.begin():
                 stmt = (
-                    select([ChannelDataDB])
+                    select(ChannelDataDB)
                     .where(ChannelDataDB.channel_id == channel_id)
                     .where(ChannelDataDB.guild_id == guild_id)
                 )
@@ -204,7 +204,7 @@ class ChannelDataManager:
         limen_time = datetime.now() + timedelta(hours=deltas)
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = select([ChannelDataDB]).where(ChannelDataDB.keep).where(ChannelDataDB.archive_time < limen_time)
+                stmt = select(ChannelDataDB).where(ChannelDataDB.keep).where(ChannelDataDB.archive_time < limen_time)
 
                 result = await session.execute(stmt)
                 result = result.fetchall()
@@ -225,7 +225,7 @@ class ChannelDataManager:
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = select([ChannelDataDB]).where(ChannelDataDB.guild_id == guild_id)
+                stmt = select(ChannelDataDB).where(ChannelDataDB.guild_id == guild_id)
                 result = await session.execute(stmt)
                 result = result.fetchall()
                 result = [self.return_dataclass(row) for row in result]
@@ -238,7 +238,7 @@ class ChannelDataManager:
         async with AsyncSession(engine) as session:
             async with session.begin():
                 stmt = (
-                    select([ChannelDataDB])
+                    select(ChannelDataDB)
                     .where(ChannelDataDB.channel_id == channel_id)
                     .where(ChannelDataDB.guild_id == guild_id)
                 )
