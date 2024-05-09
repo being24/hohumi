@@ -499,7 +499,8 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             if isinstance(after.parent, discord.TextChannel):
                 message = f"{after.name}は{'ロック' if after.locked else 'ロックが解除'}されました。"
                 try:
-                    await after.parent.send(message)
+                    if not after.is_private():
+                        await after.parent.send(message)
                 except discord.Forbidden:
                     self.logger.error(f"Forbidden {after.name} of {after.guild.name} @lock notify")
             return
@@ -541,7 +542,8 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                 return
 
             try:
-                await after.parent.send(message)
+                if not after.is_private():
+                    await after.parent.send(message)
             except discord.Forbidden:
                 self.logger.error(f"Forbidden {after.name} of {after.guild.name} @archive notify")
 
