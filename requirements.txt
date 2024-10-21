@@ -3,4 +3,4 @@ discord.py==2.4.0
 discord-sentry-reporting==2.0.4
 python-dotenv==1.0.1
 sentry-sdk==2.14.0
-SQLAlchemy==2.0.35
+SQLAlchemy==2.0.36
