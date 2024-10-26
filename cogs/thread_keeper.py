@@ -1,8 +1,11 @@
 import asyncio
+import json
 import logging
+import pathlib
 from datetime import datetime, timedelta
 from typing import List
 
+import aiofiles
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -30,7 +33,26 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         self.closed_thread_prefix = "[CLOSED]"
 
-        self.waiting_for_archive: dict[int, datetime] = {}
+        self.waiting_for_archive: dict[int, int] = {}
+
+        self.waiting_path = pathlib.Path(__file__).parents[1] / "data" / "waiting.json"
+
+    async def aio_dump_json(self) -> None:
+        """非同期的にjsonを書き込む関数
+
+        Args:
+            json_data (dict): 辞書
+        """
+        print(self.waiting_for_archive)
+        print(self.waiting_path)
+        async with aiofiles.open(self.waiting_path, "w") as f:
+            dict_string = json.dumps(
+                self.waiting_for_archive,
+                ensure_ascii=False,
+                indent=4,
+                separators=(",", ": "),
+            )
+            await f.write(dict_string)
 
     async def setup_hook(self):
         # self.bot.tree.copy_global_to(guild=MY_GUILD)
@@ -704,12 +726,25 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         if isinstance(message.channel, discord.Thread):
             # スレッドにcloseって投稿されたらアーカイブする
             if message.clean_content.lower() == "close":
-                if self.closed_thread_prefix not in message.channel.name:
-                    await message.channel.edit(
-                        name=f"{self.closed_thread_prefix}{message.channel.name}"
-                    )
+                # if self.closed_thread_prefix not in message.channel.name:
+                #     await message.channel.edit(
+                #         name=f"{self.closed_thread_prefix}{message.channel.name}"
+                #     )
 
-                await message.channel.edit(archived=True)
+                # await message.channel.edit(archived=True)
+
+                # a day later
+                tomorrow = discord.utils.utcnow() + timedelta(days=1)
+                time = f"<t:{int(tomorrow.timestamp())}:f>"
+
+                self.waiting_for_archive[message.channel.id] = int(tomorrow.timestamp())
+
+                await self.aio_dump_json()
+                await message.channel.send(f"このスレッドは{time}にアーカイブされます")
+
+                # TODO:まってボタンを設置、押されたらjsonから削除
+                # TODO:時間になったらコメントアウト部分を実行する
+
             else:
                 # 過去にclose宣言されたスレッドに書き込みがあったらスレッド名を戻す
                 if (
