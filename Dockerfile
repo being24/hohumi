@@ -31,4 +31,4 @@ RUN chown -R ${BOT_NAME}:${BOT_NAME} /opt/${BOT_NAME}/
 # switch to non-root user
 USER ${BOT_NAME}
 
-CMD ["python3","bot.py"]
+CMD ["python3","main.py"]
