@@ -1,0 +1,14 @@
+[project]
+name = "hohumi"
+version = "2.0.0"
+description = "Threds management bot for Discord servers"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "aiosqlite>=0.21.0",
+    "discord-py>=2.5.2",
+    "discord-sentry-reporting>=2.0.4",
+    "python-dotenv>=1.1.1",
+    "sentry-sdk>=2.32.0",
+    "sqlalchemy>=2.0.41",
+]
