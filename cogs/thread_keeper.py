@@ -1,11 +1,8 @@
 import asyncio
-import json
 import logging
-import pathlib
 from datetime import datetime, timedelta
 from typing import List
 
-import aiofiles
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -13,7 +10,7 @@ from discord.ext import commands, tasks
 from .utils.common import CommonUtil
 from .utils.guild_setting import GuildSettingManager
 from .utils.notify_role import NotifySettingManager
-from .utils.thread_channels import ChannelData, ChannelDataManager
+from .utils.thread_channels import ChannelDataManager
 
 
 class Hofumi(commands.Cog, name="Thread管理用cog"):
@@ -32,27 +29,6 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         self.logger = logging.getLogger("discord")
 
         self.closed_thread_prefix = "[CLOSED]"
-
-        self.waiting_for_archive: dict[int, int] = {}
-
-        self.waiting_path = pathlib.Path(__file__).parents[1] / "data" / "waiting.json"
-
-    async def aio_dump_json(self) -> None:
-        """非同期的にjsonを書き込む関数
-
-        Args:
-            json_data (dict): 辞書
-        """
-        print(self.waiting_for_archive)
-        print(self.waiting_path)
-        async with aiofiles.open(self.waiting_path, "w") as f:
-            dict_string = json.dumps(
-                self.waiting_for_archive,
-                ensure_ascii=False,
-                indent=4,
-                separators=(",", ": "),
-            )
-            await f.write(dict_string)
 
     async def setup_hook(self):
         # self.bot.tree.copy_global_to(guild=MY_GUILD)
@@ -512,6 +488,31 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             f"{len(not_maintained_threads)}スレッドを管理対象に設定しました"
         )
 
+    @app_commands.command(
+        name="close", description="このスレッドを閉架します"
+    )
+    @app_commands.guild_only()
+    async def close_thread(self, interaction: discord.Interaction):
+        """スレッドを閉架するコマンド"""
+        if not isinstance(interaction.channel, discord.Thread):
+            await interaction.response.send_message(
+                "このコマンドはスレッドチャンネル専用です", ephemeral=True
+            )
+            return
+
+        if interaction.guild is None:
+            self.logger.warning("guild is None @close_thread")
+            return
+
+        # スレッド名に[CLOSED]プレフィックスを追加
+        if self.closed_thread_prefix not in interaction.channel.name:
+            await interaction.channel.edit(
+                name=f"{self.closed_thread_prefix}{interaction.channel.name}"
+            )
+
+        # 閉架
+        await interaction.channel.edit(archived=True)
+
     @commands.Cog.listener()
     async def on_thread_create(self, thread: discord.Thread):
         await thread.join()
@@ -726,37 +727,31 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if isinstance(message.channel, discord.Thread):
-            # スレッドにcloseって投稿されたらアーカイブする
-            if message.clean_content.lower() == "close":
-                # if self.closed_thread_prefix not in message.channel.name:
-                #     await message.channel.edit(
-                #         name=f"{self.closed_thread_prefix}{message.channel.name}"
-                #     )
-
-                # await message.channel.edit(archived=True)
-
-                # a day later
-                tomorrow = discord.utils.utcnow() + timedelta(days=1)
-                time = f"<t:{int(tomorrow.timestamp())}:f>"
-
-                self.waiting_for_archive[message.channel.id] = int(tomorrow.timestamp())
-
-                await self.aio_dump_json()
-                await message.channel.send(f"このスレッドは{time}にアーカイブされます")
-
-                # TODO:まってボタンを設置、押されたらjsonから削除
-                # TODO:時間になったらコメントアウト部分を実行する
-
-            else:
-                # 過去にclose宣言されたスレッドに書き込みがあったらスレッド名を戻す
-                if (
-                    self.closed_thread_prefix in message.channel.name
-                    and message.author != self.bot.user
-                ):
-                    await message.channel.edit(archived=False)
-                    await message.channel.edit(
-                        name=message.channel.name.replace(self.closed_thread_prefix, "")
-                    )
+            # 過去にclose宣言されたスレッドに書き込みがあったらスレッド名を戻し、DB登録
+            if (
+                self.closed_thread_prefix in message.channel.name
+                and message.author != self.bot.user
+            ):
+                await message.channel.edit(archived=False)
+                await message.channel.edit(
+                    name=message.channel.name.replace(self.closed_thread_prefix, "")
+                )
+                
+                # DBに保守対象として登録
+                if message.guild is not None:
+                    # 既に登録されているかチェック
+                    if not await self.channel_data_manager.is_maintenance_channel(
+                        message.channel.id, guild_id=message.guild.id
+                    ):
+                        archive_time = self.return_estimated_archive_time(message.channel)
+                        await self.channel_data_manager.resister_channel(
+                            channel_id=message.channel.id,
+                            guild_id=message.guild.id,
+                            archive_time=archive_time,
+                        )
+                        self.logger.info(
+                            f"Re-registered thread {message.channel.name} for maintenance after close prefix removal"
+                        )
 
         if not self.watch_dog.is_running():
             self.logger.warning("watch_dog is not running!")
