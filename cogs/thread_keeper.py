@@ -16,13 +16,14 @@ from .utils.thread_channels import ChannelDataManager
 
 class AutoArchiveDuration(IntEnum):
     """スレッドの自動アーカイブ時間を表すEnum
-    
+
     値は分単位で、Discordの有効な設定値のみを含む
     """
-    ONE_HOUR = 60         # 1時間
-    ONE_DAY = 1440        # 1日
-    THREE_DAYS = 4320     # 3日
-    ONE_WEEK = 10080      # 1週間
+
+    ONE_HOUR = 60  # 1時間
+    ONE_DAY = 1440  # 1日
+    THREE_DAYS = 4320  # 3日
+    ONE_WEEK = 10080  # 1週間
 
 
 class Hofumi(commands.Cog, name="Thread管理用cog"):
@@ -41,6 +42,16 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         self.logger = logging.getLogger("discord")
 
         self.closed_thread_prefix = "[CLOSED]"
+        
+        # 2週間リマインド対象サーバーのID
+        self.reminder_target_guild_ids = [
+            410454762522411009
+        ]
+        
+        # 2週間リマインド除外チャンネルのID
+        self.reminder_exclude_channel_ids = [
+            1170361178204160031
+        ]
 
     async def setup_hook(self):
         # self.bot.tree.copy_global_to(guild=MY_GUILD)
@@ -178,6 +189,35 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             minutes=thread.auto_archive_duration
         )
         return archive_time
+
+    async def get_last_human_message_time(
+        self, thread: discord.Thread
+    ) -> datetime | None:
+        """スレッドの最後の人間のメッセージの時刻を取得する関数
+
+        Args:
+            thread (discord.Thread): 対象のスレッド
+
+        Returns:
+            datetime | None: 最後の人間のメッセージの時刻、見つからない場合はNone
+        """
+        try:
+            # まずlast_messageをチェック
+            if thread.last_message is not None and not thread.last_message.author.bot:
+                return thread.last_message.created_at
+
+            # last_messageがbotの場合はhistoryを確認
+            async for message in thread.history(limit=50):
+                if not message.author.bot:
+                    return message.created_at
+        except discord.Forbidden:
+            self.logger.error(f"Cannot access message history for thread {thread.id}")
+        except Exception as e:
+            self.logger.error(
+                f"Error getting message history for thread {thread.id}: {e}"
+            )
+
+        return None
 
     @app_commands.command(
         name="maintenance_this_thread", description="このスレッドを保守対象に設定します"
@@ -500,9 +540,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             f"{len(not_maintained_threads)}スレッドを管理対象に設定しました"
         )
 
-    @app_commands.command(
-        name="close", description="このスレッドを閉架します"
-    )
+    @app_commands.command(name="close", description="このスレッドを閉架します")
     @app_commands.guild_only()
     async def close_thread(self, interaction: discord.Interaction):
         """スレッドを閉架するコマンド"""
@@ -526,20 +564,23 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         await interaction.channel.edit(archived=True)
 
     @app_commands.command(
-        name="close_after", description="このスレッドを指定時間後に自動閉架するよう設定します"
+        name="close_after",
+        description="このスレッドを指定時間後に自動閉架するよう設定します",
     )
     @app_commands.describe(duration="自動閉架までの時間")
-    @app_commands.choices(duration=[
-        app_commands.Choice(name="1時間", value=AutoArchiveDuration.ONE_HOUR),
-        app_commands.Choice(name="1日", value=AutoArchiveDuration.ONE_DAY),
-        app_commands.Choice(name="3日", value=AutoArchiveDuration.THREE_DAYS),
-        app_commands.Choice(name="1週間", value=AutoArchiveDuration.ONE_WEEK),
-    ])
+    @app_commands.choices(
+        duration=[
+            app_commands.Choice(name="1時間", value=AutoArchiveDuration.ONE_HOUR),
+            app_commands.Choice(name="1日", value=AutoArchiveDuration.ONE_DAY),
+            app_commands.Choice(name="3日", value=AutoArchiveDuration.THREE_DAYS),
+            app_commands.Choice(name="1週間", value=AutoArchiveDuration.ONE_WEEK),
+        ]
+    )
     @app_commands.guild_only()
     async def close_after(
-        self, 
-        interaction: discord.Interaction, 
-        duration: AutoArchiveDuration = AutoArchiveDuration.ONE_DAY
+        self,
+        interaction: discord.Interaction,
+        duration: AutoArchiveDuration = AutoArchiveDuration.ONE_DAY,
     ):
         """スレッドを指定時間後に自動閉架するよう設定するコマンド"""
         if not isinstance(interaction.channel, discord.Thread):
@@ -555,7 +596,7 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         try:
             # auto_archive_durationを設定
             await interaction.channel.edit(auto_archive_duration=duration.value)
-            
+
             # 時間の表示用文字列を生成
             if duration == AutoArchiveDuration.ONE_HOUR:
                 duration_str = "1時間"
@@ -567,11 +608,11 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                 duration_str = "1週間"
             else:
                 duration_str = f"{duration.value}分"
-            
+
             await interaction.response.send_message(
                 f"このスレッドは最後の投稿から{duration_str}後に自動閉架されます"
             )
-            
+
         except discord.Forbidden:
             await interaction.response.send_message(
                 "スレッドの設定を変更する権限がありません", ephemeral=True
@@ -581,7 +622,9 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
             await interaction.response.send_message(
                 f"設定の変更に失敗しました: {e}", ephemeral=True
             )
-            self.logger.error(f"HTTPException @ close_after @{interaction.channel.id}: {e}")
+            self.logger.error(
+                f"HTTPException @ close_after @{interaction.channel.id}: {e}"
+            )
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread: discord.Thread):
@@ -806,14 +849,16 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                 await message.channel.edit(
                     name=message.channel.name.replace(self.closed_thread_prefix, "")
                 )
-                
+
                 # DBに保守対象として登録
                 if message.guild is not None:
                     # 既に登録されているかチェック
                     if not await self.channel_data_manager.is_maintenance_channel(
                         message.channel.id, guild_id=message.guild.id
                     ):
-                        archive_time = self.return_estimated_archive_time(message.channel)
+                        archive_time = self.return_estimated_archive_time(
+                            message.channel
+                        )
                         await self.channel_data_manager.resister_channel(
                             channel_id=message.channel.id,
                             guild_id=message.guild.id,
@@ -834,6 +879,9 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
         if about_to_expire is None:
             return
 
+        # 2週間リマインド用の時刻
+        two_weeks_ago = discord.utils.utcnow() - timedelta(weeks=2)
+
         for channel in about_to_expire:
             guild = self.bot.get_guild(channel.guild_id)
             if guild is None:
@@ -847,9 +895,67 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
                     channel_id=channel.channel_id, guild_id=channel.guild_id, tf=False
                 )
                 continue
+
+            # アーカイブ期限延長
             await self.extend_archive_duration(thread)
 
-            await asyncio.sleep(0.5)
+            # 2週間リマインドチェック
+            try:
+                # 対象サーバーのチェック（空の場合は全サーバーが対象）
+                if self.reminder_target_guild_ids and guild.id not in self.reminder_target_guild_ids:
+                    continue
+                
+                # 除外チャンネルのチェック
+                if thread.id in self.reminder_exclude_channel_ids:
+                    continue
+                
+                # 除外チャンネルの親チャンネルのチェック
+                if thread.parent and thread.parent.id in self.reminder_exclude_channel_ids:
+                    continue
+                
+                last_human_message_time = await self.get_last_human_message_time(thread)
+
+                if last_human_message_time is None:
+                    # 人間のメッセージが見つからない場合はスレッド作成時刻を使用
+                    last_human_message_time = thread.created_at
+
+                # 2週間以上経過している場合
+                if last_human_message_time and last_human_message_time < two_weeks_ago:
+                    try:
+                        # ロールメンションを取得
+                        role_ids = await self.notify_role.return_notified(thread.guild.id)
+                        mention_content = ""
+                        
+                        if role_ids is not None:
+                            for role_id in role_ids:
+                                role = thread.guild.get_role(role_id)
+                                if role is not None:
+                                    mention_content += f"{role.mention} "
+                        
+                        message = (
+                            f"{mention_content}\nこのスレッドは2週間以上新しい書き込みがありません。\n"
+                            "まだ活動中の場合は何か書き込みをお願いします。"
+                        )
+                        
+                        await thread.send(message.strip())
+                        self.logger.info(
+                            f"Sent inactivity reminder to thread {thread.name} in {guild.name}"
+                        )
+                    except discord.Forbidden:
+                        self.logger.error(
+                            f"Cannot send reminder to thread {thread.id} in {guild.name}"
+                        )
+                    except Exception as e:
+                        self.logger.error(
+                            f"Error sending reminder to thread {thread.id}: {e}"
+                        )
+
+            except Exception as e:
+                self.logger.error(
+                    f"Error checking inactivity for thread {thread.id}: {e}"
+                )
+
+            await asyncio.sleep(5)
 
     @watch_dog.before_loop
     async def before_printer(self):
