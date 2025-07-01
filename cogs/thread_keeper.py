@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
+from enum import IntEnum
 from typing import List
 
 import discord
@@ -11,6 +12,17 @@ from .utils.common import CommonUtil
 from .utils.guild_setting import GuildSettingManager
 from .utils.notify_role import NotifySettingManager
 from .utils.thread_channels import ChannelDataManager
+
+
+class AutoArchiveDuration(IntEnum):
+    """スレッドの自動アーカイブ時間を表すEnum
+    
+    値は分単位で、Discordの有効な設定値のみを含む
+    """
+    ONE_HOUR = 60         # 1時間
+    ONE_DAY = 1440        # 1日
+    THREE_DAYS = 4320     # 3日
+    ONE_WEEK = 10080      # 1週間
 
 
 class Hofumi(commands.Cog, name="Thread管理用cog"):
@@ -512,6 +524,64 @@ class Hofumi(commands.Cog, name="Thread管理用cog"):
 
         # 閉架
         await interaction.channel.edit(archived=True)
+
+    @app_commands.command(
+        name="close_after", description="このスレッドを指定時間後に自動閉架するよう設定します"
+    )
+    @app_commands.describe(duration="自動閉架までの時間")
+    @app_commands.choices(duration=[
+        app_commands.Choice(name="1時間", value=AutoArchiveDuration.ONE_HOUR),
+        app_commands.Choice(name="1日", value=AutoArchiveDuration.ONE_DAY),
+        app_commands.Choice(name="3日", value=AutoArchiveDuration.THREE_DAYS),
+        app_commands.Choice(name="1週間", value=AutoArchiveDuration.ONE_WEEK),
+    ])
+    @app_commands.guild_only()
+    async def close_after(
+        self, 
+        interaction: discord.Interaction, 
+        duration: AutoArchiveDuration = AutoArchiveDuration.ONE_DAY
+    ):
+        """スレッドを指定時間後に自動閉架するよう設定するコマンド"""
+        if not isinstance(interaction.channel, discord.Thread):
+            await interaction.response.send_message(
+                "このコマンドはスレッドチャンネル専用です", ephemeral=True
+            )
+            return
+
+        if interaction.guild is None:
+            self.logger.warning("guild is None @close_after")
+            return
+
+        try:
+            # auto_archive_durationを設定
+            await interaction.channel.edit(auto_archive_duration=duration.value)
+            
+            # 時間の表示用文字列を生成
+            if duration == AutoArchiveDuration.ONE_HOUR:
+                duration_str = "1時間"
+            elif duration == AutoArchiveDuration.ONE_DAY:
+                duration_str = "1日"
+            elif duration == AutoArchiveDuration.THREE_DAYS:
+                duration_str = "3日"
+            elif duration == AutoArchiveDuration.ONE_WEEK:
+                duration_str = "1週間"
+            else:
+                duration_str = f"{duration.value}分"
+            
+            await interaction.response.send_message(
+                f"このスレッドは最後の投稿から{duration_str}後に自動閉架されます"
+            )
+            
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "スレッドの設定を変更する権限がありません", ephemeral=True
+            )
+            self.logger.error(f"Forbidden @ close_after @{interaction.channel.id}")
+        except discord.HTTPException as e:
+            await interaction.response.send_message(
+                f"設定の変更に失敗しました: {e}", ephemeral=True
+            )
+            self.logger.error(f"HTTPException @ close_after @{interaction.channel.id}: {e}")
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread: discord.Thread):
