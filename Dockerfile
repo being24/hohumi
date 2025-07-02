@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 ARG BOT_NAME="hohumi"
 
@@ -11,7 +11,7 @@ ENV UV_PROJECT_ENVIRONMENT='/usr/local/'
 ENV UV_SYSTEM_PYTHON=1
 
 
-WORKDIR /opt/${BOT_NAME}/
+WORKDIR /usr/src/${BOT_NAME}/
 COPY ./ ./
 
 RUN apt update && \
@@ -26,7 +26,7 @@ RUN uv sync --frozen --no-dev --no-cache
 
 # add non-root user
 RUN adduser --disabled-password --gecos "" ${BOT_NAME}
-RUN chown -R ${BOT_NAME}:${BOT_NAME} /opt/${BOT_NAME}/
+RUN chown -R ${BOT_NAME}:${BOT_NAME} /usr/src
 
 # switch to non-root user
 USER ${BOT_NAME}
