@@ -1,27 +1,29 @@
 """
 スレッド管理コマンド群
 """
+
+import asyncio
 import logging
 
 import discord
 from discord.ext import commands
 
-from .thread_config import ThreadKeeperConfig, AutoArchiveDuration
-from .thread_management import ThreadManager
 from .common import CommonUtil
 from .guild_setting import GuildSettingManager
 from .notify_role import NotifySettingManager
 from .thread_channels import ChannelDataManager
+from .thread_config import AutoArchiveDuration, ThreadKeeperConfig
+from .thread_management import ThreadManager
 
 
 class ThreadCommands:
     """スレッド管理コマンドを提供するクラス"""
-    
+
     def __init__(self, bot, logger: logging.Logger):
         self.bot = bot
         self.logger = logger
         self.config = ThreadKeeperConfig()
-        
+
         # 各種マネージャー
         self.thread_manager = ThreadManager(bot, logger)
         self.c = CommonUtil()
@@ -30,7 +32,7 @@ class ThreadCommands:
         self.channel_data_manager = ChannelDataManager()
 
     # ======== スレッド管理コマンド ========
-    
+
     async def maintenance_this_thread_command(
         self, interaction: discord.Interaction, tf: bool = True
     ):
@@ -59,7 +61,9 @@ class ThreadCommands:
                 await self.c.delete_after(msg)
 
             else:  # 対象でなければ、upsert
-                archive_time = self.thread_manager.return_estimated_archive_time(interaction.channel)
+                archive_time = self.thread_manager.return_estimated_archive_time(
+                    interaction.channel
+                )
                 await self.channel_data_manager.resister_channel(
                     channel_id=interaction.channel.id,
                     guild_id=interaction.guild.id,
@@ -93,7 +97,9 @@ class ThreadCommands:
                 msg = await interaction.original_response()
                 await self.c.delete_after(msg)
 
-    async def full_maintenance_command(self, interaction: discord.Interaction, tf: bool = True):
+    async def full_maintenance_command(
+        self, interaction: discord.Interaction, tf: bool = True
+    ):
         """このサーバーの新規作成されるスレッドを保守するようにするコマンドの実装"""
         if isinstance(interaction.channel, discord.DMChannel):
             await interaction.response.send_message(
@@ -106,7 +112,7 @@ class ThreadCommands:
         if interaction.guild is None:
             self.logger.warning("guild is None @full_maintenance")
             return
-            
+
         # DBの設定を書き換える
         await self.guild_setting_mng.set_full_maintenance(interaction.guild.id, tf)
 
@@ -115,7 +121,9 @@ class ThreadCommands:
             f"{interaction.guild.name}の全スレッドの保守を{status_text}に設定しました"
         )
 
-    async def resister_notify_command(self, ctx: commands.Context, *bot_role: discord.Role):
+    async def resister_notify_command(
+        self, ctx: commands.Context, *bot_role: discord.Role
+    ):
         """スレッド作成時に自動参加するbot_roleを設定するコマンドの実装"""
         role_ids = [role.id for role in bot_role]
         role_mentions = [role.mention for role in bot_role]
@@ -143,7 +151,7 @@ class ThreadCommands:
                 role = ctx.guild.get_role(role_id)
                 if role is not None:
                     role_mentions.append(role.mention)
-            
+
             if role_mentions:
                 await ctx.send(f"設定されている役職: {', '.join(role_mentions)}")
             else:
@@ -159,8 +167,10 @@ class ThreadCommands:
 
         await interaction.response.defer()
         await self.thread_manager.extend_archive_duration(interaction.channel)
-        
-        estimated_time = self.thread_manager.return_estimated_archive_time(interaction.channel)
+
+        estimated_time = self.thread_manager.return_estimated_archive_time(
+            interaction.channel
+        )
         await interaction.followup.send(
             f"アーカイブ時間を延長しました。\n推定アーカイブ時刻: {estimated_time}"
         )
@@ -173,39 +183,45 @@ class ThreadCommands:
             )
             return
 
-        estimated_time = self.thread_manager.return_estimated_archive_time(interaction.channel)
+        estimated_time = self.thread_manager.return_estimated_archive_time(
+            interaction.channel
+        )
         await interaction.response.send_message(f"推定アーカイブ時刻: {estimated_time}")
 
     async def check_archive_time_command(self, interaction: discord.Interaction):
         """このサーバーの管理対象スレッドのアーカイブ時刻を確認するコマンドの実装"""
         if interaction.guild is None:
-            await interaction.response.send_message("このコマンドはサーバー専用です", ephemeral=True)
+            await interaction.response.send_message(
+                "このコマンドはサーバー専用です", ephemeral=True
+            )
             return
 
         await interaction.response.defer()
-        
+
         # DBから管理対象チャンネルを取得
         maintenance_data = await self.channel_data_manager.get_data_guild(
             interaction.guild.id
         )
-        
+
         if not maintenance_data:
             await interaction.followup.send("管理対象のスレッドはありません")
             return
 
         # 応答メッセージの構築
         message_parts = ["**管理対象スレッドのアーカイブ時刻:**"]
-        
+
         for channel_data in maintenance_data:
             channel = interaction.guild.get_channel(channel_data.channel_id)
             if channel and isinstance(channel, discord.Thread):
                 archive_time = channel_data.archive_time or "不明"
                 message_parts.append(f"• {channel.name}: {archive_time}")
             else:
-                message_parts.append(f"• ID {channel_data.channel_id}: チャンネルが見つかりません")
+                message_parts.append(
+                    f"• ID {channel_data.channel_id}: チャンネルが見つかりません"
+                )
 
         message = "\n".join(message_parts)
-        
+
         # メッセージが長すぎる場合は分割
         if len(message) > 2000:
             await interaction.followup.send(message[:2000])
@@ -228,11 +244,13 @@ class ThreadCommands:
     async def read_staff_command(self, interaction: discord.Interaction):
         """既存スレッドに新スタッフを一括追加するコマンドの実装"""
         if interaction.guild is None:
-            await interaction.response.send_message("このコマンドはサーバー専用です", ephemeral=True)
+            await interaction.response.send_message(
+                "このコマンドはサーバー専用です", ephemeral=True
+            )
             return
 
         await interaction.response.defer()
-        
+
         # サーバー内の全スレッドを取得
         threads = []
         for channel in interaction.guild.channels:
@@ -246,7 +264,9 @@ class ThreadCommands:
             return
 
         await self.thread_manager.read_staff_to_thread(threads)
-        await interaction.followup.send(f"{len(threads)}個のスレッドにスタッフを追加しました")
+        await interaction.followup.send(
+            f"{len(threads)}個のスレッドにスタッフを追加しました"
+        )
 
     async def close_command(self, interaction: discord.Interaction):
         """スレッドを閉架するコマンドの実装"""
@@ -258,7 +278,7 @@ class ThreadCommands:
 
         thread = interaction.channel
         new_name = f"{self.config.CLOSED_THREAD_PREFIX}{thread.name}"
-        
+
         # 名前の長さ制限をチェック（Discordの制限は100文字）
         if len(new_name) > 100:
             # プレフィックスを短縮するか、元の名前を切り詰める
@@ -267,8 +287,9 @@ class ThreadCommands:
             new_name = f"{self.config.CLOSED_THREAD_PREFIX}{truncated_name}"
 
         try:
+            await interaction.response.send_message("スレッドを閉架します...")
+            await asyncio.sleep(1)  # 少し待機してから閉架処理を行う
             await thread.edit(name=new_name, archived=True)
-            await interaction.response.send_message("スレッドを閉架しました")
         except discord.Forbidden:
             await interaction.response.send_message(
                 "スレッドを閉架する権限がありません", ephemeral=True
@@ -291,7 +312,7 @@ class ThreadCommands:
 
         thread = interaction.channel
         duration_display = AutoArchiveDuration.get_display_name(duration)
-        
+
         try:
             await thread.edit(auto_archive_duration=duration.value)  # type: ignore
             await interaction.response.send_message(

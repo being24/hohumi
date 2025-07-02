@@ -1,6 +1,7 @@
 """
 スレッド管理Cog（リファクタリング版）
 """
+
 import asyncio
 import logging
 
@@ -26,7 +27,7 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         self.bot: commands.Bot = bot
         self.logger = logging.getLogger("discord")
         self.config = ThreadKeeperConfig()
-        
+
         # ユーティリティクラス
         self.c = CommonUtil()
 
@@ -34,7 +35,7 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         self.guild_setting_mng = GuildSettingManager()
         self.channel_data_manager = ChannelDataManager()
         self.notify_role = NotifySettingManager()
-        
+
         # スレッド管理とコマンド処理
         self.thread_manager = ThreadManager(bot, self.logger)
         self.thread_commands = ThreadCommands(bot, self.logger)
@@ -109,15 +110,147 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
     async def on_message(self, message: discord.Message):
         """メッセージ送信時のイベントハンドラー"""
         # CLOSEDプレフィックスの付いたスレッドの再開処理
-        if (isinstance(message.channel, discord.Thread) and 
-            self.config.CLOSED_THREAD_PREFIX in message.channel.name and
-            message.author != self.bot.user):
-            await self.thread_manager.process_closed_thread_reopening(message)
+        # if (isinstance(message.channel, discord.Thread) and
+        #     self.config.CLOSED_THREAD_PREFIX in message.channel.name and
+        #     message.author != self.bot.user):
+        #     await self.thread_manager.process_closed_thread_reopening(message)
 
         # watch_dogタスクの監視
         if not self.watch_dog.is_running():
             self.logger.warning("watch_dog is not running!")
             self.watch_dog.start()
+
+    @commands.Cog.listener()
+    async def on_thread_update(self, before: discord.Thread, after: discord.Thread):
+        # closeされたときに復活させるか？
+        # 権限がないのであればスルーする
+        if not after.permissions_for(after.guild.me).manage_threads:
+            self.logger.error(
+                f"no permission to manage thread {after.name} of {after.guild.name} @ on_thread_update"
+            )
+            return
+
+        # 監視対象であるか？
+        if await self.channel_data_manager.is_maintenance_channel(
+            channel_id=after.id, guild_id=after.guild.id
+        ):
+            if after.locked != before.locked:
+                await self.channel_data_manager.set_maintenance_channel(
+                    channel_id=after.id, guild_id=after.guild.id, tf=not after.archived
+                )
+
+            # アーカイブされたらkeepをfalseに、解除されたらkeepをtrueにする
+            if after.archived != before.archived:
+                await self.channel_data_manager.set_maintenance_channel(
+                    channel_id=after.id, guild_id=after.guild.id, tf=not after.archived
+                )
+            # アーカイブ時間の設定変更時にDBも書き換える
+            if after.archive_timestamp != before.archive_timestamp:
+                self.thread_manager.return_estimated_archive_time(after)
+                archive_time = self.thread_manager.return_estimated_archive_time(after)
+                await self.channel_data_manager.update_archived_time(
+                    channel_id=after.id,
+                    guild_id=after.guild.id,
+                    archive_time=archive_time,
+                )
+
+        # 名前が変更された時
+        if before.name != after.name:
+            try:
+                # close prefixの付け外だった場合 or archiveされている場合は何もしない
+                if (
+                    not (
+                        (
+                            self.config.CLOSED_THREAD_PREFIX not in before.name
+                            and self.config.CLOSED_THREAD_PREFIX in after.name
+                        )
+                        or (
+                            self.config.CLOSED_THREAD_PREFIX in before.name
+                            and self.config.CLOSED_THREAD_PREFIX not in after.name
+                        )
+                    )
+                    or after.archived
+                ):
+                    if isinstance(before.parent, discord.TextChannel):
+                        thread_kinds_name = "スレッド"
+                    else:
+                        thread_kinds_name = "フォーラム"
+                    await after.send(
+                        f"この{thread_kinds_name}チャンネル名が変更されました。\n{before.name}→{after.name}"
+                    )
+
+            except discord.Forbidden:
+                self.logger.error(
+                    f"Forbidden {after.name} of {after.guild.name} @rename notify"
+                )
+
+        if after.parent is None:
+            return
+
+        # ロックされたとき
+        if before.locked != after.locked:
+            if isinstance(after.parent, discord.TextChannel):
+                message = f"{after.name}は{'ロック' if after.locked else 'ロックが解除'}されました。"
+                try:
+                    if not after.is_private():
+                        await after.parent.send(message)
+                except discord.Forbidden:
+                    self.logger.error(
+                        f"Forbidden {after.name} of {after.guild.name} @lock notify"
+                    )
+            return
+
+        # アーカイブ状態に変化があった
+        if before.archived != after.archived:
+            # ForumChannelであるなら何もしない
+            if isinstance(after.parent, discord.ForumChannel):
+                return
+            # アーカイブ通知を送る
+            log = None
+            try:
+                logs = [
+                    entry
+                    async for entry in after.guild.audit_logs(
+                        limit=1, action=discord.AuditLogAction.thread_update
+                    )
+                ]
+                log = logs[0]
+            except discord.Forbidden:
+                pass
+
+            if log is not None:
+                if discord.utils.utcnow() - log.created_at > timedelta(minutes=5):
+                    log = None
+
+            if log is None:
+                message = f"{after.name}は{'閉架' if after.archived else '閉架が解除'}されました。"
+            else:
+                message = f"{log.user}によって{after.name}は{'閉架' if after.archived else '閉架が解除'}されました。"
+
+            # logとlog.userとself.bot.userがNoneならreturn
+
+            if log is None:
+                return
+
+            if log.user is None:
+                return
+
+            if self.bot.user is None:
+                return
+
+            try:
+                if not after.is_private():
+                    await after.parent.send(message)
+            except discord.Forbidden:
+                self.logger.error(
+                    f"Forbidden {after.name} of {after.guild.name} @archive notify"
+                )
+
+            # アーカイブ時間が変更されたとき、[CLOSED]がついていれば、外す
+            if not after.archived:
+                await after.edit(
+                    name=f"{after.name.replace('[CLOSED]', '')}", archived=False
+                )
 
     @tasks.loop(minutes=15.0)
     async def watch_dog(self):
@@ -148,9 +281,13 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
             try:
                 reminded = await self.thread_manager.check_inactivity_and_remind(thread)
                 if reminded:
-                    self.logger.info(f"Sent inactivity reminder to thread {thread.name}")
+                    self.logger.info(
+                        f"Sent inactivity reminder to thread {thread.name}"
+                    )
             except Exception as e:
-                self.logger.error(f"Error checking inactivity for thread {thread.id}: {e}")
+                self.logger.error(
+                    f"Error checking inactivity for thread {thread.id}: {e}"
+                )
 
             await asyncio.sleep(5)
 
@@ -165,7 +302,7 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         return
 
     # ======== コマンド定義 ========
-    
+
     @app_commands.command(
         name="maintenance_this_thread", description="このスレッドを保守対象に設定します"
     )
