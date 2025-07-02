@@ -1,17 +1,20 @@
-import sys
-import traceback
 import logging
 
-from discord.ext import commands
 import discord
+from discord.ext import commands
 
 
 class CommandErrorHandler(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: commands.Bot):
+        self.bot:commands.Bot = bot
+        self.logger = logging.getLogger("discord.error_handler")
+
+    def _log_error(self, error: Exception, context_info: str) -> None:
+        """エラーログを統一的に処理する"""
+        self.logger.error(f"Command error occurred:\n{context_info}", exc_info=error)
 
     @staticmethod
-    async def delete_after(msg: discord.Message, second: int = 5):
+    async def delete_after(msg: discord.Message, second: int = 5) -> None:
         """渡されたメッセージを指定秒数後に削除する関数
 
         Args:
@@ -24,10 +27,8 @@ class CommandErrorHandler(commands.Cog):
             pass
 
     @commands.Cog.listener()
-    async def on_command_error(self, ctx, error):
-        """The event triggered when an error is raised while invoking a command.
-        ctx   : Context
-        error : Exception"""
+    async def on_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
+        """テキストコマンドのエラーハンドリング"""
 
         if hasattr(ctx.command, "on_error"):  # ローカルのハンドリングがあるコマンドは除く
             return
@@ -36,63 +37,91 @@ class CommandErrorHandler(commands.Cog):
             return
 
         elif isinstance(error, commands.DisabledCommand):
-            msg = await ctx.reply(f"{ctx.command} has been disabled.")
+            msg = await ctx.reply(f"{ctx.command}は無効化されています")
             await self.delete_after(msg)
             return
 
         elif isinstance(error, commands.CheckFailure):
-            await ctx.reply(f"you have no permission to execute {ctx.command}.")
+            msg = await ctx.reply(f"{ctx.command}を実行する権限がありません")
+            await self.delete_after(msg)
             return
 
         elif isinstance(error, commands.NoPrivateMessage):
             try:
-                return await ctx.reply(f"{ctx.command} can not be used in Private Messages.")
+                msg = await ctx.reply(f"{ctx.command}はDMでは使用できません")
+                await self.delete_after(msg)
             except discord.HTTPException:
-                print("couldn't send direct message")
+                self.logger.warning("DMでのメッセージ送信に失敗しました")
+            return
 
         elif isinstance(error, commands.BadArgument):
             msg = await ctx.reply("無効な引数です")
             await self.delete_after(msg)
+            return
 
         elif isinstance(error, commands.MissingRequiredArgument):
-            msg = await ctx.reply("引数が足りません")
+            msg = await ctx.reply("必要な引数が不足しています")
             await self.delete_after(msg)
+            return
 
         else:
-            error = getattr(error, "original", error)
-            print("Ignoring exception in command {}:".format(ctx.command), file=sys.stderr)
-            traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
-            error_content = f"error content: {error}\nmessage_content: {ctx.message.content}\nmessage_author : {ctx.message.author}\n{ctx.message.jump_url}"
-
-            logging.error(error_content, exc_info=True)
+            # 予期しないエラーの処理
+            original_error = getattr(error, "original", error)
+            context_info = (
+                f"Command: {ctx.command}\n"
+                f"Message: {ctx.message.content}\n"
+                f"Author: {ctx.message.author}\n"
+                f"Guild: {ctx.guild}\n"
+                f"Channel: {ctx.channel}\n"
+                f"URL: {ctx.message.jump_url}"
+            )
+            self._log_error(original_error, context_info)
 
     @commands.Cog.listener()
-    async def on_application_command_error(self, ctx, error):
-        """
-        The event triggered when an error is raised while invoking a command.
-        ctx   : Context
-        error : Exception
-        """
+    async def on_application_command_error(self, interaction: discord.Interaction, error: discord.app_commands.AppCommandError) -> None:
+        """スラッシュコマンドのエラーハンドリング"""
 
-        if isinstance(error, commands.errors.MissingPermissions):
-            await ctx.respond(f"you have no permission to execute {ctx.command.name}.")
-            logging.error(
-                f"権限エラー: {ctx.author}\nguild: {ctx.interaction.guild}\nchannel: {ctx.interaction.channel}",
-                exc_info=True,
+        if isinstance(error, discord.app_commands.MissingPermissions):
+            command_name = interaction.command.name if interaction.command else "不明なコマンド"
+            await interaction.response.send_message(
+                f"{command_name}を実行する権限がありません", ephemeral=True
             )
+            context_info = (
+                f"Permission Error - Command: {command_name}\n"
+                f"User: {interaction.user}\n"
+                f"Guild: {interaction.guild}\n"
+                f"Channel: {interaction.channel}"
+            )
+            self._log_error(error, context_info)
             return
 
-        elif isinstance(error.original, commands.errors.MessageNotFound):
-            await ctx.respond("message not found.", delete_after=5)
+        elif hasattr(error, 'original') and isinstance(getattr(error, 'original', None), commands.errors.MessageNotFound):
+            if not interaction.response.is_done():
+                await interaction.response.send_message("メッセージが見つかりません", ephemeral=True)
+            else:
+                await interaction.followup.send("メッセージが見つかりません", ephemeral=True)
             return
 
         else:
-            error = getattr(error, "original", error)
-            print("Ignoring exception in command {}:".format(ctx.command), file=sys.stderr)
-            traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
-            error_content = f"error content: {error}\nmessage_content: {ctx.command.name}\nmessage_author : {ctx.author}\nguild: {ctx.interaction.guild}\nchannnel: {ctx.interaction.channel}"
-
-            logging.error(error_content, exc_info=True)
+            # 予期しないエラーの処理
+            original_error = getattr(error, "original", error)
+            context_info = (
+                f"App Command: {interaction.command.name if interaction.command else 'Unknown'}\n"
+                f"User: {interaction.user}\n"
+                f"Guild: {interaction.guild}\n"
+                f"Channel: {interaction.channel}"
+            )
+            self._log_error(original_error, context_info)
+            
+            # ユーザーにエラーを通知
+            error_msg = "予期しないエラーが発生しました"
+            try:
+                if not interaction.response.is_done():
+                    await interaction.response.send_message(error_msg, ephemeral=True)
+                else:
+                    await interaction.followup.send(error_msg, ephemeral=True)
+            except discord.HTTPException:
+                self.logger.error("エラーメッセージの送信に失敗しました")
 
 
 async def setup(bot):
