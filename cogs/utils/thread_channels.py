@@ -9,7 +9,7 @@ from sqlalchemy import delete, exc, insert, select, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.schema import Column
 from sqlalchemy.types import VARCHAR, BigInteger, Boolean, DateTime, Integer, String
 
@@ -17,6 +17,7 @@ try:
     from .db import engine
 except ImportError:
     from db import engine
+
 
 Base = declarative_base()
 
@@ -48,7 +49,6 @@ class ChannelDataManager:
 
     @staticmethod
     def return_dataclass(data: ChannelDataDB) -> ChannelData:
-
         db_data = data[0]
         processed_data = ChannelData(
             channel_id=db_data.channel_id,
@@ -71,7 +71,9 @@ class ChannelDataManager:
 
         return processed_data
 
-    async def resister_channel(self, channel_id: int, guild_id: int, archive_time: datetime) -> None:
+    async def resister_channel(
+        self, channel_id: int, guild_id: int, archive_time: datetime
+    ) -> None:
         """チャンネルの設定を登録する関数
 
         Args:
@@ -81,11 +83,18 @@ class ChannelDataManager:
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = insert(ChannelDataDB).values(channel_id=channel_id, guild_id=guild_id, archive_time=archive_time)
+                stmt = insert(ChannelDataDB).values(
+                    channel_id=channel_id, guild_id=guild_id, archive_time=archive_time
+                )
 
                 do_update_stmt = stmt.on_conflict_do_update(
                     index_elements=["channel_id", "guild_id"],
-                    set_=dict(channel_id=channel_id, guild_id=guild_id, keep=True, archive_time=archive_time),
+                    set_=dict(
+                        channel_id=channel_id,
+                        guild_id=guild_id,
+                        keep=True,
+                        archive_time=archive_time,
+                    ),
                 )
                 await session.execute(do_update_stmt)
 
@@ -140,7 +149,9 @@ class ChannelDataManager:
                 else:
                     return True
 
-    async def set_maintenance_channel(self, channel_id: int, guild_id: int, tf: bool) -> None:
+    async def set_maintenance_channel(
+        self, channel_id: int, guild_id: int, tf: bool
+    ) -> None:
         """チャンネルの保守設定を編集する関数
 
         Args:
@@ -158,7 +169,9 @@ class ChannelDataManager:
                 )
                 await session.execute(stmt)
 
-    async def update_archived_time(self, channel_id: int, guild_id: int, archive_time: datetime) -> None:
+    async def update_archived_time(
+        self, channel_id: int, guild_id: int, archive_time: datetime
+    ) -> None:
         """チャンネルのアーカイブ時間を更新する関数
 
         Args:
@@ -192,7 +205,9 @@ class ChannelDataManager:
                 )
                 await session.execute(stmt)
 
-    async def get_about_to_expire_channel(self, deltas: int = 24) -> Optional[List[ChannelData]]:
+    async def get_about_to_expire_channel(
+        self, deltas: int = 24
+    ) -> Optional[List[ChannelData]]:
         """指定された時間以内に自動アーカイブされるチャンネルを取得する関数
 
         Args:
@@ -204,7 +219,11 @@ class ChannelDataManager:
         limen_time = datetime.now() + timedelta(hours=deltas)
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = select(ChannelDataDB).where(ChannelDataDB.keep).where(ChannelDataDB.archive_time < limen_time)
+                stmt = (
+                    select(ChannelDataDB)
+                    .where(ChannelDataDB.keep)
+                    .where(ChannelDataDB.archive_time < limen_time)
+                )
 
                 result = await session.execute(stmt)
                 result = result.fetchall()
@@ -234,7 +253,9 @@ class ChannelDataManager:
                 else:
                     return result
 
-    async def get_channel_data(self, channel_id: int, guild_id: int) -> Optional[ChannelData]:
+    async def get_channel_data(
+        self, channel_id: int, guild_id: int
+    ) -> Optional[ChannelData]:
         async with AsyncSession(engine) as session:
             async with session.begin():
                 stmt = (
@@ -253,6 +274,6 @@ class ChannelDataManager:
 
 if __name__ == "__main__":
     setting_mng = ChannelDataManager()
-    result = asyncio.run(setting_mng.is_maintenance_channel(channel_id=871010016000348171, guild_id=609058923353341973))
+    result = asyncio.run(setting_mng.get_about_to_expire_channel())
 
     print((result))
