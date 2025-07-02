@@ -4,18 +4,19 @@
 
 import asyncio
 import logging
+from datetime import timedelta
 
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from .utils.thread_config import ThreadKeeperConfig, AutoArchiveDuration
-from .utils.thread_management import ThreadManager
-from .utils.thread_commands import ThreadCommands
 from .utils.common import CommonUtil
 from .utils.guild_setting import GuildSettingManager
 from .utils.notify_role import NotifySettingManager
 from .utils.thread_channels import ChannelDataManager
+from .utils.thread_commands import ThreadCommands
+from .utils.thread_config import AutoArchiveDuration, ThreadKeeperConfig
+from .utils.thread_management import ThreadManager
 
 
 class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
@@ -122,135 +123,174 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
 
     @commands.Cog.listener()
     async def on_thread_update(self, before: discord.Thread, after: discord.Thread):
-        # closeされたときに復活させるか？
-        # 権限がないのであればスルーする
-        if not after.permissions_for(after.guild.me).manage_threads:
+        """スレッド更新時のイベントハンドラー"""
+        # 権限チェック
+        if not self._is_manageable_thread(after):
             self.logger.error(
                 f"no permission to manage thread {after.name} of {after.guild.name} @ on_thread_update"
             )
             return
 
-        # 監視対象であるか？
-        if await self.channel_data_manager.is_maintenance_channel(
-            channel_id=after.id, guild_id=after.guild.id
-        ):
-            if after.locked != before.locked:
-                await self.channel_data_manager.set_maintenance_channel(
-                    channel_id=after.id, guild_id=after.guild.id, tf=not after.archived
-                )
-
-            # アーカイブされたらkeepをfalseに、解除されたらkeepをtrueにする
-            if after.archived != before.archived:
-                await self.channel_data_manager.set_maintenance_channel(
-                    channel_id=after.id, guild_id=after.guild.id, tf=not after.archived
-                )
-            # アーカイブ時間の設定変更時にDBも書き換える
-            if after.archive_timestamp != before.archive_timestamp:
-                self.thread_manager.return_estimated_archive_time(after)
-                archive_time = self.thread_manager.return_estimated_archive_time(after)
-                await self.channel_data_manager.update_archived_time(
-                    channel_id=after.id,
-                    guild_id=after.guild.id,
-                    archive_time=archive_time,
-                )
-
-        # 名前が変更された時
-        if before.name != after.name:
-            try:
-                # close prefixの付け外だった場合 or archiveされている場合は何もしない
-                if (
-                    not (
-                        (
-                            self.config.CLOSED_THREAD_PREFIX not in before.name
-                            and self.config.CLOSED_THREAD_PREFIX in after.name
-                        )
-                        or (
-                            self.config.CLOSED_THREAD_PREFIX in before.name
-                            and self.config.CLOSED_THREAD_PREFIX not in after.name
-                        )
-                    )
-                    or after.archived
-                ):
-                    if isinstance(before.parent, discord.TextChannel):
-                        thread_kinds_name = "スレッド"
-                    else:
-                        thread_kinds_name = "フォーラム"
-                    await after.send(
-                        f"この{thread_kinds_name}チャンネル名が変更されました。\n{before.name}→{after.name}"
-                    )
-
-            except discord.Forbidden:
-                self.logger.error(
-                    f"Forbidden {after.name} of {after.guild.name} @rename notify"
-                )
-
+        # 監視対象スレッドの状態管理
+        await self._handle_maintenance_channel_updates(before, after)
+        
+        # 名前変更の処理
+        await self._handle_thread_name_change(before, after)
+        
         if after.parent is None:
             return
-
-        # ロックされたとき
+            
+        # ロック状態変更の処理
         if before.locked != after.locked:
-            if isinstance(after.parent, discord.TextChannel):
-                message = f"{after.name}は{'ロック' if after.locked else 'ロックが解除'}されました。"
-                try:
-                    if not after.is_private():
-                        await after.parent.send(message)
-                except discord.Forbidden:
-                    self.logger.error(
-                        f"Forbidden {after.name} of {after.guild.name} @lock notify"
-                    )
+            await self._handle_thread_lock_change(after)
+            return
+            
+        # アーカイブ状態変更の処理
+        if before.archived != after.archived:
+            await self._handle_thread_archive_change(before, after)
+
+    async def _handle_maintenance_channel_updates(self, before: discord.Thread, after: discord.Thread):
+        """監視対象チャンネルの状態更新を処理"""
+        if not await self.channel_data_manager.is_maintenance_channel(
+            channel_id=after.id, guild_id=after.guild.id
+        ):
             return
 
-        # アーカイブ状態に変化があった
-        if before.archived != after.archived:
-            # ForumChannelであるなら何もしない
-            if isinstance(after.parent, discord.ForumChannel):
+        # ロック状態変更時
+        if after.locked != before.locked:
+            await self.channel_data_manager.set_maintenance_channel(
+                channel_id=after.id, guild_id=after.guild.id, tf=not after.archived
+            )
+
+        # アーカイブ状態変更時
+        if after.archived != before.archived:
+            await self.channel_data_manager.set_maintenance_channel(
+                channel_id=after.id, guild_id=after.guild.id, tf=not after.archived
+            )
+            
+        # アーカイブ時間変更時
+        if after.archive_timestamp != before.archive_timestamp:
+            archive_time = self.thread_manager.return_estimated_archive_time(after)
+            await self.channel_data_manager.update_archived_time(
+                channel_id=after.id,
+                guild_id=after.guild.id,
+                archive_time=archive_time,
+            )
+
+    async def _handle_thread_name_change(self, before: discord.Thread, after: discord.Thread):
+        """スレッド名変更の処理"""
+        if before.name == after.name:
+            return
+            
+        try:
+            # CLOSED プレフィックスの付け外しやアーカイブ状態の場合は通知しない
+            if self._is_closed_prefix_change(before.name, after.name) or after.archived:
                 return
-            # アーカイブ通知を送る
-            log = None
-            try:
-                logs = [
-                    entry
-                    async for entry in after.guild.audit_logs(
-                        limit=1, action=discord.AuditLogAction.thread_update
-                    )
-                ]
-                log = logs[0]
-            except discord.Forbidden:
-                pass
+                
+            thread_kind = "スレッド" if isinstance(before.parent, discord.TextChannel) else "フォーラム"
+            await after.send(
+                f"この{thread_kind}チャンネル名が変更されました。\n{before.name}→{after.name}"
+            )
+            
+        except discord.Forbidden:
+            self.logger.error(
+                f"Forbidden {after.name} of {after.guild.name} @rename notify"
+            )
 
-            if log is not None:
-                if discord.utils.utcnow() - log.created_at > timedelta(minutes=5):
-                    log = None
+    def _is_closed_prefix_change(self, before_name: str, after_name: str) -> bool:
+        """CLOSED プレフィックスの付け外しかどうかを判定"""
+        prefix = self.config.CLOSED_THREAD_PREFIX
+        return (
+            (prefix not in before_name and prefix in after_name) or
+            (prefix in before_name and prefix not in after_name)
+        )
 
-            if log is None:
-                message = f"{after.name}は{'閉架' if after.archived else '閉架が解除'}されました。"
-            else:
-                message = f"{log.user}によって{after.name}は{'閉架' if after.archived else '閉架が解除'}されました。"
+    async def _handle_thread_lock_change(self, thread: discord.Thread):
+        """スレッドロック状態変更の処理"""
+        if not isinstance(thread.parent, discord.TextChannel):
+            return
+            
+        message = f"{thread.name}は{'ロック' if thread.locked else 'ロックが解除'}されました。"
+        try:
+            if not thread.is_private():
+                await thread.parent.send(message)
+        except discord.Forbidden:
+            self.logger.error(
+                f"Forbidden {thread.name} of {thread.guild.name} @lock notify"
+            )
 
-            # logとlog.userとself.bot.userがNoneならreturn
+    async def _handle_thread_archive_change(self, before: discord.Thread, after: discord.Thread):
+        """スレッドアーカイブ状態変更の処理"""
+        # フォーラムチャンネルの場合は何もしない
+        if isinstance(after.parent, discord.ForumChannel):
+            return
+            
+        # 監査ログを取得してアーカイブ実行者を特定
+        log = await self._get_recent_thread_audit_log(after.guild)
+        
+        # 必要な値がNullの場合は処理を中断
+        if not self._validate_archive_notification_requirements(log):
+            return
+            
+        # 通知メッセージを送信
+        message = self._build_archive_message(after.name, after.archived, log)
+        await self._send_archive_notification(after, message)
+        
+        # アーカイブ解除時にCLOSEDプレフィックスを削除
+        if not after.archived:
+            await self._remove_closed_prefix(after)
 
-            if log is None:
-                return
-
-            if log.user is None:
-                return
-
-            if self.bot.user is None:
-                return
-
-            try:
-                if not after.is_private():
-                    await after.parent.send(message)
-            except discord.Forbidden:
-                self.logger.error(
-                    f"Forbidden {after.name} of {after.guild.name} @archive notify"
+    async def _get_recent_thread_audit_log(self, guild: discord.Guild):
+        """最近のスレッド更新監査ログを取得"""
+        try:
+            logs = [
+                entry async for entry in guild.audit_logs(
+                    limit=1, action=discord.AuditLogAction.thread_update
                 )
+            ]
+            log = logs[0] if logs else None
+            
+            # 5分以上古いログは無効とする
+            if log and discord.utils.utcnow() - log.created_at > timedelta(minutes=5):
+                log = None
+                
+            return log
+        except discord.Forbidden:
+            return None
 
-            # アーカイブ時間が変更されたとき、[CLOSED]がついていれば、外す
-            if not after.archived:
-                await after.edit(
-                    name=f"{after.name.replace('[CLOSED]', '')}", archived=False
-                )
+    def _validate_archive_notification_requirements(self, log) -> bool:
+        """アーカイブ通知の必要条件を検証"""
+        return log is not None and log.user is not None and self.bot.user is not None
+
+    def _build_archive_message(self, thread_name: str, is_archived: bool, log) -> str:
+        """アーカイブ通知メッセージを構築"""
+        action = "閉架" if is_archived else "閉架が解除"
+        
+        if log is None:
+            return f"{thread_name}は{action}されました。"
+        else:
+            return f"{log.user}によって{thread_name}は{action}されました。"
+
+    async def _send_archive_notification(self, thread: discord.Thread, message: str):
+        """アーカイブ通知を送信"""
+        try:
+            if not thread.is_private() and isinstance(thread.parent, discord.TextChannel):
+                await thread.parent.send(message)
+        except discord.Forbidden:
+            self.logger.error(
+                f"Forbidden {thread.name} of {thread.guild.name} @archive notify"
+            )
+
+    async def _remove_closed_prefix(self, thread: discord.Thread):
+        """CLOSEDプレフィックスを削除"""
+        try:
+            cleaned_name = thread.name.replace('[CLOSED]', '')
+            if cleaned_name != thread.name:
+                await thread.edit(name=cleaned_name, archived=False)
+        except discord.Forbidden:
+            self.logger.error(
+                f"Cannot remove CLOSED prefix from thread {thread.id}"
+            )
 
     @tasks.loop(minutes=15.0)
     async def watch_dog(self):
