@@ -1,11 +1,9 @@
-version: "3.7"
-
 services:
   hohumi:
     image: "ghcr.io/being24/hohumi:latest"
     volumes:
-      - ./hohumi-data:/opt/hohumi/data
-      - ./hohumi-log:/opt/hohumi/log
+      - ./data:/opt/hohumi/data
+      - ./log:/opt/hohumi/log
     env_file:
       - ./.env
     restart: always
