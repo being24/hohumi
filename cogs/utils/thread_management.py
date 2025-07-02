@@ -29,6 +29,10 @@ class ThreadManager:
         """2週間リマインドから除外すべきかどうかを確認"""
         guild_id = thread.guild.id
 
+        # フォーラムチャンネルは除外
+        if isinstance(thread.parent, discord.ForumChannel):
+            return True
+
         # 対象サーバーのチェック（空の場合は全サーバーが対象）
         if (
             self.config.REMINDER_TARGET_GUILD_IDS
