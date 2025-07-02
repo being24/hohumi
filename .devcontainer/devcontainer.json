@@ -18,7 +18,8 @@
 				"ms-python.debugpy",
 				"ms-python.vscode-python-envs",
 				"charliermarsh.ruff",
-				"redhat.vscode-yaml"
+				"redhat.vscode-yaml",
+				"mhutchie.git-graph"
 			]
 		}
 	},

@@ -21,10 +21,12 @@ class MyBot(commands.Bot):
         )
 
     async def setup_hook(self) -> None:
-        for cog in current_path.glob("cogs/*.py"):
+        for cog_path in current_path.glob("cogs/*.py"):
             try:
-                await self.load_extension(f"cogs.{cog.stem}")
+                await self.load_extension(f"cogs.{cog_path.stem}")
+                print(f"Loaded: {cog_path.stem}")
             except Exception:
+                print(f"Failed to load: {cog_path.stem}")
                 traceback.print_exc()
 
     async def on_ready(self):
