@@ -1,6 +1,7 @@
 """
 スレッド管理に関する設定と定数
 """
+
 from enum import IntEnum
 
 
@@ -16,34 +17,34 @@ class AutoArchiveDuration(IntEnum):
     ONE_WEEK = 10080  # 1週間
 
     @classmethod
-    def get_display_name(cls, duration: 'AutoArchiveDuration') -> str:
+    def get_display_name(cls, duration: "AutoArchiveDuration") -> str:
         """表示用の文字列を取得"""
         mapping = {
             cls.ONE_HOUR: "1時間",
-            cls.ONE_DAY: "1日", 
+            cls.ONE_DAY: "1日",
             cls.THREE_DAYS: "3日",
-            cls.ONE_WEEK: "1週間"
+            cls.ONE_WEEK: "1週間",
         }
         return mapping.get(duration, f"{duration.value}分")
 
 
 class ThreadKeeperConfig:
     """スレッド管理の設定値"""
-    
+
     # プレフィックス
     CLOSED_THREAD_PREFIX = "[CLOSED]"
-    
+
     # アーカイブ時間設定
     TMP_ARCHIVE_DURATION = 60  # 一時的なアーカイブ時間
     FINAL_ARCHIVE_DURATION = 10080  # 最終的なアーカイブ時間（1週間）
-    
+
     # リマインド設定
     REMINDER_WEEKS = 2  # リマインド対象期間（週）
-    
+
     # 対象サーバーと除外チャンネルの設定
     REMINDER_TARGET_GUILD_IDS = [410454762522411009]
-    REMINDER_EXCLUDE_CHANNEL_IDS = [1170361178204160031]
-    
+    REMINDER_EXCLUDE_CHANNEL_IDS = []
+
     # タスク設定
     WATCH_DOG_INTERVAL_MINUTES = 15  # watch_dogタスクの実行間隔（分）
     THREAD_PROCESSING_SLEEP_SECONDS = 5  # スレッド処理間の待機時間（秒）
