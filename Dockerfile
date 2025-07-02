@@ -24,11 +24,13 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 # install dependencies
 RUN uv sync --frozen --no-dev --no-cache
 
-# add non-root user
-RUN adduser --disabled-password --gecos "" ${BOT_NAME}
-RUN chown -R ${BOT_NAME}:${BOT_NAME} /usr/src
+# # add non-root user
+# RUN adduser --disabled-password --gecos "" ${BOT_NAME}
 
-# switch to non-root user
-USER ${BOT_NAME}
+# # create directories and set permissions
+# RUN chown -R ${BOT_NAME}:${BOT_NAME} /usr/src/${BOT_NAME}
+
+# # switch to non-root user
+# USER ${BOT_NAME}
 
 CMD ["uv","run","main.py"]
