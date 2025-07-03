@@ -147,14 +147,14 @@ class ReminderExclusionCog(commands.Cog, name="リマインド除外管理"):
 
     @app_commands.command(
         name="reminder_exclude_thread",
-        description="このスレッドをリマインド対象から除外し、リマインダー期間を設定します (デフォルト: 4週間)",
+        description="リマインド期間を設定します (デフォルト: 4週間、0で無効化)",
     )
     @app_commands.default_permissions(manage_channels=True)
     @app_commands.guild_only()
     async def reminder_exclude_thread(
         self, interaction: discord.Interaction, weeks: int = 4
     ):
-        """現在のスレッドをリマインド対象から除外し、リマインダー期間を設定する"""
+        """リマインド期間を設定"""
         if not interaction.guild:
             await interaction.response.send_message(
                 "このコマンドはサーバー内でのみ使用できます。", ephemeral=True
