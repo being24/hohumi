@@ -11,6 +11,7 @@ import discord
 from .thread_config import ThreadKeeperConfig
 from .notify_role import NotifySettingManager
 from .thread_channels import ChannelDataManager
+from .reminder_exclusions import ReminderExclusionManager
 
 
 class ThreadManager:
@@ -24,8 +25,9 @@ class ThreadManager:
         # マネージャークラス
         self.channel_data_manager = ChannelDataManager()
         self.notify_role = NotifySettingManager()
+        self.reminder_exclusions = ReminderExclusionManager()
 
-    def _should_exclude_from_reminder(self, thread: discord.Thread) -> bool:
+    async def _should_exclude_from_reminder(self, thread: discord.Thread) -> bool:
         """2週間リマインドから除外すべきかどうかを確認"""
         guild_id = thread.guild.id
 
@@ -40,15 +42,9 @@ class ThreadManager:
         ):
             return True
 
-        # 除外チャンネルのチェック
-        if thread.id in self.config.REMINDER_EXCLUDE_CHANNEL_IDS:
-            return True
-
-        # 除外チャンネルの親チャンネルのチェック
-        if (
-            thread.parent
-            and thread.parent.id in self.config.REMINDER_EXCLUDE_CHANNEL_IDS
-        ):
+        # DBから除外設定をチェック
+        parent_id = thread.parent.id if thread.parent else None
+        if await self.reminder_exclusions.is_excluded(thread.id, guild_id, parent_id):
             return True
 
         return False
@@ -247,7 +243,7 @@ class ThreadManager:
             bool: リマインドを送信した場合はTrue
         """
         # 除外チェック
-        if self._should_exclude_from_reminder(thread):
+        if await self._should_exclude_from_reminder(thread):
             return False
 
         # 指定週間前の時刻を計算
