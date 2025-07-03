@@ -3,6 +3,7 @@
 """
 
 from dataclasses import dataclass
+from email.mime import base
 from typing import List, Optional
 
 from sqlalchemy import delete, select
@@ -17,6 +18,8 @@ try:
 except ImportError:
     from db import engine
     from thread_channels import Base
+
+Base = declarative_base()
 
 
 @dataclass
@@ -60,6 +63,7 @@ class ReminderExclusionManager:
         channel_id: int,
         guild_id: int,
         exclude_type: str = "channel",
+        reminder_weeks: int = 4,
         exclude_children: bool = True,
     ) -> None:
         """除外設定を追加する関数"""
@@ -70,6 +74,7 @@ class ReminderExclusionManager:
                         channel_id=channel_id,
                         guild_id=guild_id,
                         exclude_type=exclude_type,
+                        reminder_weeks=reminder_weeks,
                         exclude_children=exclude_children,
                     )
 
@@ -77,12 +82,12 @@ class ReminderExclusionManager:
                         index_elements=["channel_id", "guild_id"],
                         set_=dict(
                             exclude_type=exclude_type,
+                            reminder_weeks=reminder_weeks,
                             exclude_children=exclude_children,
                         ),
                     )
                     await session.execute(do_update_stmt)
         except Exception as e:
-            # ログ出力などのエラーハンドリングを追加可能
             raise e
 
     async def remove_exclusion(self, channel_id: int, guild_id: int) -> bool:

@@ -25,12 +25,15 @@ class ReminderExclusionCog(commands.Cog, name="リマインド除外管理"):
 
     @app_commands.command(
         name="reminder_exclude_channel",
-        description="このチャンネル下の全スレッドをリマインド対象から除外",
+        description="このチャンネル下の全スレッドをリマインド対象から除外し、リマインダー期間を設定します (デフォルト: 4週間)",
     )
+    @app_commands.describe(weeks="リマインドまでの週数（0で無効化）")
     @app_commands.default_permissions(manage_channels=True)
     @app_commands.guild_only()
-    async def reminder_exclude_channel(self, interaction: discord.Interaction):
-        """現在のチャンネルをリマインド対象から除外する"""
+    async def reminder_exclude_channel(
+        self, interaction: discord.Interaction, weeks: int = 4
+    ):
+        """現在のチャンネルをリマインド対象から除外し、リマインダー期間を設定する"""
         if not interaction.guild:
             await interaction.response.send_message(
                 "このコマンドはサーバー内でのみ使用できます。", ephemeral=True
@@ -55,17 +58,29 @@ class ReminderExclusionCog(commands.Cog, name="リマインド除外管理"):
             )
             return
 
+        if weeks < 0:
+            await interaction.response.send_message(
+                "リマインダー期間は0以上の値を指定してください。", ephemeral=True
+            )
+            return
+
         try:
             await self.reminder_exclusions.add_exclusion(
                 channel_id=target_channel.id,
                 guild_id=interaction.guild.id,
                 exclude_type="channel",
                 exclude_children=True,
+                reminder_weeks=weeks,
             )
+
+            if weeks == 0:
+                description = f"{target_channel.mention} 下の全スレッドのリマインダーを無効化しました。"
+            else:
+                description = f"{target_channel.mention} 下の全スレッドのリマインダー期間を{weeks}週間に設定しました。"
 
             embed = discord.Embed(
                 title="除外設定完了",
-                description=f"{target_channel.mention} 下の全スレッドをリマインド対象から除外しました。",
+                description=description,
                 color=discord.Color.green(),
             )
             await interaction.response.send_message(embed=embed)
@@ -132,22 +147,29 @@ class ReminderExclusionCog(commands.Cog, name="リマインド除外管理"):
 
     @app_commands.command(
         name="reminder_exclude_thread",
-        description="このスレッドをリマインド対象から除外",
+        description="このスレッドをリマインド対象から除外し、リマインダー期間を設定します (デフォルト: 4週間)",
     )
     @app_commands.default_permissions(manage_channels=True)
     @app_commands.guild_only()
-    async def reminder_exclude_thread(self, interaction: discord.Interaction):
-        """現在のスレッドをリマインド対象から除外する"""
+    async def reminder_exclude_thread(
+        self, interaction: discord.Interaction, weeks: int = 4
+    ):
+        """現在のスレッドをリマインド対象から除外し、リマインダー期間を設定する"""
         if not interaction.guild:
             await interaction.response.send_message(
                 "このコマンドはサーバー内でのみ使用できます。", ephemeral=True
             )
             return
 
-        # スレッド内でのみ実行可能
         if not isinstance(interaction.channel, discord.Thread):
             await interaction.response.send_message(
                 "このコマンドはスレッド内でのみ使用できます。", ephemeral=True
+            )
+            return
+
+        if weeks < 0:
+            await interaction.response.send_message(
+                "リマインダー期間は0以上の値を指定してください。", ephemeral=True
             )
             return
 
@@ -159,11 +181,19 @@ class ReminderExclusionCog(commands.Cog, name="リマインド除外管理"):
                 guild_id=interaction.guild.id,
                 exclude_type="thread",
                 exclude_children=False,
+                reminder_weeks=weeks,
             )
+
+            if weeks == 0:
+                description = (
+                    f"このスレッド「{thread.name}」のリマインダーを無効化しました。"
+                )
+            else:
+                description = f"このスレッド「{thread.name}」のリマインダー期間を{weeks}週間に設定しました。"
 
             embed = discord.Embed(
                 title="除外設定完了",
-                description=f"このスレッド「{thread.name}」をリマインド対象から除外しました。",
+                description=description,
                 color=discord.Color.green(),
             )
             await interaction.response.send_message(embed=embed)
