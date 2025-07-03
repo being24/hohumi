@@ -28,6 +28,7 @@ class ReminderExclusion:
     guild_id: int
     exclude_type: str  # 'channel' or 'thread'
     exclude_children: bool
+    reminder_weeks: int  # リマインダー期間（週単位）
 
 
 class ReminderExclusionDB(Base):
@@ -36,6 +37,7 @@ class ReminderExclusionDB(Base):
     guild_id = Column(BigInteger, primary_key=True)
     exclude_type = Column(String(10), default="channel")  # 'channel' or 'thread'
     exclude_children = Column(Boolean, default=True)
+    reminder_weeks = Column(BigInteger, default=4)  # デフォルトは4週間
 
 
 class ReminderExclusionManager:
@@ -55,6 +57,7 @@ class ReminderExclusionManager:
             guild_id=db_data.guild_id,
             exclude_type=db_data.exclude_type,
             exclude_children=db_data.exclude_children,
+            reminder_weeks=db_data.reminder_weeks,  # 新しいフィールドを追加
         )
         return processed_data
 
@@ -88,6 +91,7 @@ class ReminderExclusionManager:
                     )
                     await session.execute(do_update_stmt)
         except Exception as e:
+            print(f"Error in add_exclusion: {e}")
             raise e
 
     async def remove_exclusion(self, channel_id: int, guild_id: int) -> bool:
@@ -159,6 +163,9 @@ class ReminderExclusionManager:
                             guild_id=exc[0].guild_id,
                             exclude_type=exc[0].exclude_type,
                             exclude_children=exc[0].exclude_children,
+                            reminder_weeks=exc[
+                                0
+                            ].reminder_weeks,  # 新しいフィールドを追加
                         )
                         for exc in exclusions
                     ]
@@ -175,3 +182,31 @@ class ReminderExclusionManager:
     ) -> bool:
         """スレッドが除外されているかの簡易チェック"""
         return await self.is_excluded(thread_id, guild_id, parent_channel_id)
+
+    async def get_exclusion(
+        self, channel_id: int, guild_id: int
+    ) -> Optional[ReminderExclusion]:
+        """特定の除外設定を取得"""
+        try:
+            async with AsyncSession(engine) as session:
+                async with session.begin():
+                    stmt = select(ReminderExclusionDB).where(
+                        ReminderExclusionDB.channel_id == channel_id,
+                        ReminderExclusionDB.guild_id == guild_id,
+                    )
+                    result = await session.execute(stmt)
+                    exclusion = result.fetchone()
+
+                    if not exclusion:
+                        return None
+
+                    return ReminderExclusion(
+                        channel_id=exclusion[0].channel_id,
+                        guild_id=exclusion[0].guild_id,
+                        exclude_type=exclusion[0].exclude_type,
+                        exclude_children=exclusion[0].exclude_children,
+                        reminder_weeks=exclusion[0].reminder_weeks,
+                    )
+        except Exception as e:
+            print(f"Error fetching exclusion: {e}")
+            return None
