@@ -1,5 +1,3 @@
-# !/usr/bin/env python3
-
 import asyncio
 import pathlib
 from dataclasses import dataclass
@@ -13,8 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.schema import Column
-from sqlalchemy.types import (VARCHAR, BigInteger, Boolean, DateTime, Integer,
-                              String)
+from sqlalchemy.types import VARCHAR, BigInteger, Boolean, DateTime, Integer, String
 
 try:
     from .db import engine
@@ -31,39 +28,31 @@ class NotifyRole:
 
 
 class NotifyRoleDB(Base):
-    __tablename__ = 'notify_setting'
+    __tablename__ = "notify_setting"
     guild_id = Column(BigInteger, primary_key=True, nullable=False)
     id = Column(BigInteger, primary_key=True, nullable=False)
 
 
-class NotifySettingManager():
+class NotifySettingManager:
     def __init__(self) -> None:
         pass
 
     async def create_table(self) -> None:
-        """テーブルを作成する関数
-        """
+        """テーブルを作成する関数"""
         async with engine.begin() as conn:
             await conn.run_sync(NotifyRoleDB.metadata.create_all)
 
     @staticmethod
     def return_dataclass(data: List[NotifyRoleDB]) -> NotifyRole:
-
         db_data = data[0]
-        processed_data = NotifyRole(
-            guild_id=db_data.guild_id,
-            id=db_data.id
-        )
+        processed_data = NotifyRole(guild_id=db_data.guild_id, id=db_data.id)
 
         return processed_data
 
     @staticmethod
     def return_DBClass(data: NotifyRole) -> NotifyRoleDB:
         db_data = data
-        processed_data = NotifyRoleDB(
-            guild_id=db_data.guild_id,
-            id=db_data.id
-        )
+        processed_data = NotifyRoleDB(guild_id=db_data.guild_id, id=db_data.id)
 
         return processed_data
 
@@ -78,10 +67,10 @@ class NotifySettingManager():
         async with AsyncSession(engine) as session:
             async with session.begin():
                 for id in role_ids:
-                    stmt = insert(NotifyRoleDB).values(
-                        guild_id=guild_id, id=id)
+                    stmt = insert(NotifyRoleDB).values(guild_id=guild_id, id=id)
                     do_nothing_stmt = stmt.on_conflict_do_nothing(
-                        index_elements=['guild_id', 'id'])
+                        index_elements=["guild_id", "id"]
+                    )
                     await session.execute(do_nothing_stmt)
 
     async def delete_notify(self, guild_id: int) -> None:
@@ -92,8 +81,7 @@ class NotifySettingManager():
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = delete(NotifyRoleDB).where(
-                    NotifyRoleDB.guild_id == guild_id)
+                stmt = delete(NotifyRoleDB).where(NotifyRoleDB.guild_id == guild_id)
                 await session.execute(stmt)
 
     async def return_notified(self, guild_id: int) -> Optional[List[int]]:
@@ -107,12 +95,10 @@ class NotifySettingManager():
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = select(NotifyRoleDB).where(
-                    NotifyRoleDB.guild_id == guild_id)
+                stmt = select(NotifyRoleDB).where(NotifyRoleDB.guild_id == guild_id)
                 result = await session.execute(stmt)
                 result = result.fetchall()
-                result = [self.return_dataclass(
-                    result).id for result in result]
+                result = [self.return_dataclass(result).id for result in result]
 
                 if len(result) == 0:
                     return None
@@ -122,8 +108,6 @@ class NotifySettingManager():
 
 if __name__ == "__main__":
     setting_mng = NotifySettingManager()
-    result = asyncio.run(
-        setting_mng.return_notified(
-            guild_id=609058923353341973))
+    result = asyncio.run(setting_mng.return_notified(guild_id=609058923353341973))
 
     print((result))

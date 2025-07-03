@@ -1,5 +1,3 @@
-# !/usr/bin/env python3
-
 import asyncio
 import pathlib
 from dataclasses import dataclass
@@ -81,8 +79,12 @@ class GuildSettingManager:
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = insert(GuildSettingDB).values(guild_id=guild.id, guild_name=guild.name)
-                do_nothing_stmt = stmt.on_conflict_do_nothing(index_elements=["guild_id"])
+                stmt = insert(GuildSettingDB).values(
+                    guild_id=guild.id, guild_name=guild.name
+                )
+                do_nothing_stmt = stmt.on_conflict_do_nothing(
+                    index_elements=["guild_id"]
+                )
                 await session.execute(do_nothing_stmt)
 
     async def set_full_maintenance(self, guild_id: int, tf: bool) -> None:
@@ -94,7 +96,11 @@ class GuildSettingManager:
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = update(GuildSettingDB).where(GuildSettingDB.guild_id == guild_id).values(keep_all=tf)
+                stmt = (
+                    update(GuildSettingDB)
+                    .where(GuildSettingDB.guild_id == guild_id)
+                    .values(keep_all=tf)
+                )
                 await session.execute(stmt)
 
     async def is_full_maintenance(self, guild_id: int) -> bool:
@@ -108,7 +114,9 @@ class GuildSettingManager:
         """
         async with AsyncSession(engine) as session:
             async with session.begin():
-                stmt = select(GuildSettingDB.keep_all).where(GuildSettingDB.guild_id == guild_id)
+                stmt = select(GuildSettingDB.keep_all).where(
+                    GuildSettingDB.guild_id == guild_id
+                )
                 result = await session.execute(stmt)
                 result = result.fetchone()
                 result = result[0]

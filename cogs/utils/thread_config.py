@@ -41,9 +41,8 @@ class ThreadKeeperConfig:
     # リマインド設定
     REMINDER_WEEKS = 2  # リマインド対象期間（週）
 
-    # 対象サーバーと除外チャンネルの設定
+    # 対象サーバーの設定
     REMINDER_TARGET_GUILD_IDS = [410454762522411009]
-    REMINDER_EXCLUDE_CHANNEL_IDS = []
 
     # タスク設定
     WATCH_DOG_INTERVAL_MINUTES = 15  # watch_dogタスクの実行間隔（分）
