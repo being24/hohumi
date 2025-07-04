@@ -290,6 +290,15 @@ class ThreadCommands:
             await interaction.response.send_message("スレッドを閉架します...")
             await asyncio.sleep(1)  # 少し待機してから閉架処理を行う
             await thread.edit(name=new_name, archived=True)
+
+            # DB上の保守対象からも除外
+            if interaction.guild is not None:
+                await self.channel_data_manager.set_maintenance_channel(
+                    channel_id=thread.id,
+                    guild_id=interaction.guild.id,
+                    tf=False,
+                )
+
         except discord.Forbidden:
             await interaction.response.send_message(
                 "スレッドを閉架する権限がありません", ephemeral=True
@@ -315,6 +324,15 @@ class ThreadCommands:
 
         try:
             await thread.edit(auto_archive_duration=duration.value)  # type: ignore
+
+            # DB上の保守対象からも除外
+            if interaction.guild is not None:
+                await self.channel_data_manager.set_maintenance_channel(
+                    channel_id=thread.id,
+                    guild_id=interaction.guild.id,
+                    tf=False,
+                )
+
             await interaction.response.send_message(
                 f"スレッドが{duration_display}後に自動的に閉架されるように設定しました"
             )
