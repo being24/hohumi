@@ -110,6 +110,8 @@ class ThreadManager:
 
         try:
             msg = await thread.send(content)
+            await asyncio.sleep(1)
+
             await msg.edit(content=f"{role_mentions} {content}")
         except discord.Forbidden:
             self.logger.error(f"Cannot add staff to thread {thread.id}")
@@ -236,6 +238,8 @@ class ThreadManager:
                     continue
 
                 msg = await thread.send(content)
+                await asyncio.sleep(1)
+
                 await msg.edit(content=f"{role_mentions} {content}")
                 await asyncio.sleep(1)
 
