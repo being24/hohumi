@@ -111,10 +111,12 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
     async def on_message(self, message: discord.Message):
         """メッセージ送信時のイベントハンドラー"""
         # CLOSEDプレフィックスの付いたスレッドの再開処理
-        # if (isinstance(message.channel, discord.Thread) and
-        #     self.config.CLOSED_THREAD_PREFIX in message.channel.name and
-        #     message.author != self.bot.user):
-        #     await self.thread_manager.process_closed_thread_reopening(message)
+        if (
+            isinstance(message.channel, discord.Thread)
+            and self.config.CLOSED_THREAD_PREFIX in message.channel.name
+            and message.author != self.bot.user
+        ):
+            await self.thread_manager.process_closed_thread_reopening(message)
 
         # watch_dogタスクの監視
         if not self.watch_dog.is_running():
