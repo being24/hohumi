@@ -107,6 +107,15 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
             if waiting is not None and waiting not in thread.applied_tags:
                 await thread.add_tags(waiting)
 
+        # スレッド名の末尾に今日の日付（YYMMDD形式）を追加（既に付いていれば追加しない）
+        today_str = datetime.now().strftime("%y%m%d")
+        date_pattern = r"\\d{6}$"
+        if not re.search(date_pattern, thread.name):
+            try:
+                await thread.edit(name=f"{thread.name}{today_str}")
+            except Exception as e:
+                self.logger.error(f"スレッド名の日付付与失敗: {e}")
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         """メッセージ送信時のイベントハンドラー"""
