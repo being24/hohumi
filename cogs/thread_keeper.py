@@ -4,7 +4,8 @@
 
 import asyncio
 import logging
-from datetime import timedelta
+import re
+from datetime import datetime, timedelta
 
 import discord
 from discord import app_commands
@@ -253,14 +254,18 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
             return
 
         # 通知メッセージを送信
-        message = self._build_archive_message(after.name, after.archived, log)
+        message = self._build_archive_message(
+            before.name, after.archived, before.jump_url, log
+        )
         await self._send_archive_notification(after, message)
 
         # アーカイブ解除時にCLOSEDプレフィックスを削除
         if not after.archived:
             await self._remove_closed_prefix(after)
 
-    async def _get_recent_thread_audit_log(self, guild: discord.Guild):
+    async def _get_recent_thread_audit_log(
+        self, guild: discord.Guild
+    ) -> discord.AuditLogEntry | None:
         """最近のスレッド更新監査ログを取得"""
         try:
             logs = [
@@ -283,14 +288,21 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         """アーカイブ通知の必要条件を検証"""
         return log is not None and log.user is not None and self.bot.user is not None
 
-    def _build_archive_message(self, thread_name: str, is_archived: bool, log) -> str:
+    def _build_archive_message(
+        self,
+        thread_name: str,
+        is_archived: bool,
+        thread_url: str,
+        log: discord.AuditLogEntry | None,
+    ) -> str:
         """アーカイブ通知メッセージを構築"""
         action = "閉架" if is_archived else "閉架が解除"
 
+        thread_link = f"[{thread_name}]({thread_url})"
         if log is None:
-            return f"{thread_name}は{action}されました。"
+            return f"{thread_link}は{action}されました。"
         else:
-            return f"{log.user}によって{thread_name}は{action}されました。"
+            return f"{log.user}によって{thread_link}は{action}されました。"
 
     async def _send_archive_notification(self, thread: discord.Thread, message: str):
         """アーカイブ通知を送信"""
