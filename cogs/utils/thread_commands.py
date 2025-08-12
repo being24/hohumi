@@ -241,32 +241,30 @@ class ThreadCommands:
         await self.thread_manager.add_staff_to_thread(interaction.channel)
         await interaction.followup.send("スタッフを追加しました")
 
-    async def read_staff_command(self, interaction: discord.Interaction):
-        """既存スレッドに新スタッフを一括追加するコマンドの実装"""
-        if interaction.guild is None:
-            await interaction.response.send_message(
-                "このコマンドはサーバー専用です", ephemeral=True
-            )
-            return
-
-        await interaction.response.defer()
-
-        # サーバー内の全スレッドを取得
-        threads = []
-        for channel in interaction.guild.channels:
-            if isinstance(channel, (discord.TextChannel, discord.ForumChannel)):
-                for thread in channel.threads:
-                    if isinstance(thread, discord.Thread) and not thread.archived:
-                        threads.append(thread)
-
-        if not threads:
-            await interaction.followup.send("アクティブなスレッドが見つかりません")
-            return
-
-        await self.thread_manager.read_staff_to_thread(threads)
-        await interaction.followup.send(
-            f"{len(threads)}個のスレッドにスタッフを追加しました"
-        )
+    async def remove_mentions_and_readd(self, thread: discord.Thread) -> None:
+        """
+        スレッドの最初のBotメッセージからメンションを削除し、再度同じ内容を送信して全員を参加させる
+        """
+        # スレッドの履歴から最初のBotメッセージを取得
+        async for message in thread.history(limit=5, oldest_first=True):
+            if message.author == self.bot.user and message.mentions:
+                # メンションを除去した内容を作成
+                content_wo_mentions = re.sub(
+                    r"<@!?[0-9]+>", "", message.content
+                ).strip()
+                # 元メッセージを編集してメンションを消す
+                try:
+                    await message.edit(content=content_wo_mentions)
+                except Exception as e:
+                    self.logger.error(f"メッセージ編集失敗: {e}")
+                # メンションだけを再送信
+                mentions_str = " ".join(m.mention for m in message.mentions)
+                if mentions_str:
+                    try:
+                        await thread.send(mentions_str)
+                    except Exception as e:
+                        self.logger.error(f"メンション再送信失敗: {e}")
+                break
 
     async def close_command(self, interaction: discord.Interaction):
         """スレッドを閉架するコマンドの実装"""
