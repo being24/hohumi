@@ -451,6 +451,59 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         """スレッドを指定時間後に自動閉架するよう設定するコマンド"""
         await self.thread_commands.close_after_command(interaction, duration)
 
+    @app_commands.command(
+        name="show_notify_roles", description="現在自動参加させる役職を表示します"
+    )
+    @app_commands.guild_only()
+    async def show_notify_roles(self, interaction: discord.Interaction):
+        """現在自動参加させる役職を表示するスラッシュコマンド"""
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "このコマンドはサーバー専用です", ephemeral=True
+            )
+            return
+        role_ids = await self.notify_role.return_notified(interaction.guild.id)
+        if not role_ids:
+            await interaction.response.send_message(
+                "自動参加させる役職は設定されていません"
+            )
+            return
+        role_mentions = []
+        for role_id in role_ids:
+            role = interaction.guild.get_role(role_id)
+            if role is not None:
+                role_mentions.append(role.mention)
+        if role_mentions:
+            await interaction.response.send_message(
+                f"現在自動参加させる役職: {', '.join(role_mentions)}"
+            )
+        else:
+            await interaction.response.send_message(
+                "設定されている役職が見つかりません", ephemeral=True
+            )
+
+    @app_commands.command(
+        name="set_notify_roles",
+        description="スレッド作成時に自動参加させる役職を選択できます",
+    )
+    @app_commands.describe(
+        delete_all="既存の自動参加役職を全て削除する（デフォルト: False）"
+    )
+    @commands.has_permissions(manage_guild=True)
+    @app_commands.guild_only()
+    async def set_notify_roles(
+        self, interaction: discord.Interaction, delete_all: bool = False
+    ):
+        """スレッド作成時に自動参加させる役職を選択するスラッシュコマンド。delete_all=Trueで全削除"""
+        if delete_all:
+            if interaction.guild is None:
+                return
+            await self.notify_role.delete_notify(interaction.guild.id)
+            await interaction.response.send_message("自動参加役職を全て削除しました")
+            return
+        ctx = await commands.Context.from_interaction(interaction)
+        await self.thread_commands.resister_notify_command(ctx)
+
 
 async def setup(bot):
     await bot.add_cog(ThreadKeeper(bot))

@@ -57,21 +57,24 @@ class NotifySettingManager:
         return processed_data
 
     async def resister_notify(self, guild_id: int, role_ids: List[int]) -> None:
-        """通知対象を追加する関数
+        """通知対象を上書きする関数（既存を全削除→新規追加）
 
         Args:
             guild_id (int): サーバーのID
-            bot_role_id (int): 役職のID
+            role_ids (List[int]): 役職IDリスト
         """
-
         async with AsyncSession(engine) as session:
             async with session.begin():
-                for id in role_ids:
-                    stmt = insert(NotifyRoleDB).values(guild_id=guild_id, id=id)
-                    do_nothing_stmt = stmt.on_conflict_do_nothing(
-                        index_elements=["guild_id", "id"]
+                # 既存の通知対象を全削除
+                await session.execute(
+                    delete(NotifyRoleDB).where(NotifyRoleDB.guild_id == guild_id)
+                )
+                # 新しい通知対象を一括追加
+                if role_ids:
+                    await session.execute(
+                        insert(NotifyRoleDB),
+                        [{"guild_id": guild_id, "id": rid} for rid in role_ids],
                     )
-                    await session.execute(do_nothing_stmt)
 
     async def delete_notify(self, guild_id: int) -> None:
         """通知対象を削除する関数
