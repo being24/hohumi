@@ -2,8 +2,8 @@
 リマインド除外設定管理
 """
 
+import json
 from dataclasses import dataclass
-from email.mime import base
 from typing import List, Optional
 
 from sqlalchemy import delete, select
@@ -29,6 +29,7 @@ class ReminderExclusion:
     exclude_type: str  # 'channel' or 'thread'
     exclude_children: bool
     reminder_weeks: int  # リマインダー期間（週単位）
+    roles: Optional[list[int]] = None  # メンション対象ロールIDリスト
 
 
 class ReminderExclusionDB(Base):
@@ -38,6 +39,7 @@ class ReminderExclusionDB(Base):
     exclude_type = Column(String(10), default="channel")  # 'channel' or 'thread'
     exclude_children = Column(Boolean, default=True)
     reminder_weeks = Column(BigInteger, default=4)  # デフォルトは4週間
+    roles = Column(String, default="[]")  # メンション対象ロールIDリスト(JSON文字列)
 
 
 class ReminderExclusionManager:
@@ -50,14 +52,32 @@ class ReminderExclusionManager:
             await conn.run_sync(ReminderExclusionDB.metadata.create_all)
 
     @staticmethod
-    def return_dataclass(data) -> ReminderExclusion:
+    def parse_roles(roles_field) -> list[int]:
+        """rolesカラム(JSON文字列)をlist[int]に変換"""
+        if hasattr(roles_field, "__str__") and roles_field:
+            try:
+                return json.loads(roles_field)
+            except Exception:
+                return []
+        return []
+
+    @staticmethod
+    def dump_roles(roles: Optional[list[int]]) -> str:
+        """rolesリストをJSON文字列に変換"""
+        try:
+            return json.dumps(roles) if roles is not None else "[]"
+        except Exception:
+            return "[]"
+
+    def return_dataclass(self, data) -> ReminderExclusion:
         db_data = data[0]
         processed_data = ReminderExclusion(
             channel_id=db_data.channel_id,
             guild_id=db_data.guild_id,
             exclude_type=db_data.exclude_type,
             exclude_children=db_data.exclude_children,
-            reminder_weeks=db_data.reminder_weeks,  # 新しいフィールドを追加
+            reminder_weeks=db_data.reminder_weeks,
+            roles=self.parse_roles(getattr(db_data, "roles", None)),
         )
         return processed_data
 
@@ -68,6 +88,7 @@ class ReminderExclusionManager:
         exclude_type: str = "channel",
         reminder_weeks: int = 4,
         exclude_children: bool = True,
+        roles: Optional[list[int]] = None,
     ) -> None:
         """除外設定を追加する関数"""
         try:
@@ -79,6 +100,7 @@ class ReminderExclusionManager:
                         exclude_type=exclude_type,
                         reminder_weeks=reminder_weeks,
                         exclude_children=exclude_children,
+                        roles=self.dump_roles(roles),
                     )
 
                     do_update_stmt = stmt.on_conflict_do_update(
@@ -87,6 +109,7 @@ class ReminderExclusionManager:
                             exclude_type=exclude_type,
                             reminder_weeks=reminder_weeks,
                             exclude_children=exclude_children,
+                            roles=self.dump_roles(roles),
                         ),
                     )
                     await session.execute(do_update_stmt)
@@ -163,9 +186,8 @@ class ReminderExclusionManager:
                             guild_id=exc[0].guild_id,
                             exclude_type=exc[0].exclude_type,
                             exclude_children=exc[0].exclude_children,
-                            reminder_weeks=exc[
-                                0
-                            ].reminder_weeks,  # 新しいフィールドを追加
+                            reminder_weeks=exc[0].reminder_weeks,
+                            roles=self.parse_roles(getattr(exc[0], "roles", None)),
                         )
                         for exc in exclusions
                     ]
@@ -206,6 +228,7 @@ class ReminderExclusionManager:
                         exclude_type=exclusion[0].exclude_type,
                         exclude_children=exclusion[0].exclude_children,
                         reminder_weeks=exclusion[0].reminder_weeks,
+                        roles=self.parse_roles(getattr(exclusion[0], "roles", None)),
                     )
         except Exception as e:
             print(f"Error fetching exclusion: {e}")

@@ -152,19 +152,32 @@ class ThreadManager:
     async def send_inactivity_reminder(self, thread: discord.Thread):
         """非アクティブスレッドにリマインダーを送信"""
         try:
-            # スレッドのリマインダー期間を取得
+            # スレッドのリマインダー期間・rolesを取得
             exclusion = await self.reminder_exclusions.get_exclusion(
                 thread.id, thread.guild.id
             )
             reminder_weeks = (
                 exclusion.reminder_weeks if exclusion else self.config.REMINDER_WEEKS
             )
+            roles = exclusion.roles if exclusion and exclusion.roles else []
 
-            role_mentions = await self._build_role_mentions(thread.guild)
+            # DBのrolesがあればそれをメンション、なければスレッドオーナー
+            mentions = []
+            if roles:
+                for role_id in roles:
+                    role = thread.guild.get_role(role_id)
+                    if role:
+                        mentions.append(role.mention)
+            if not mentions:
+                # rolesが空ならスレッドオーナーにメンション
+                if thread.owner_id:
+                    member = thread.guild.get_member(thread.owner_id)
+                    if member:
+                        mentions.append(member.mention)
+
             message_parts = []
-
-            if role_mentions:
-                message_parts.append(role_mentions)
+            if mentions:
+                message_parts.append(" ".join(mentions))
 
             message_parts.append(
                 f"⚠️ このスレッドは{reminder_weeks}週間以上新しい書き込みがありません。\n"

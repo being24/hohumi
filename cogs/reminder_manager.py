@@ -182,6 +182,7 @@ class ReminderExclusionCog(commands.Cog, name="リマインド除外管理"):
                 exclude_type="thread",
                 exclude_children=False,
                 reminder_weeks=weeks,
+                roles=[thread.owner_id] if thread.owner_id else [],
             )
 
             if weeks == 0:
