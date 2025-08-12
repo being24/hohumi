@@ -282,25 +282,44 @@ class ThreadCommands:
         """
         スレッドの最初のBotメッセージからメンションを削除し、再度同じ内容を送信して全員を参加させる
         """
+
         # スレッドの履歴から最初のBotメッセージを取得
         async for message in thread.history(limit=5, oldest_first=True):
-            if message.author == self.bot.user and message.mentions:
+            if message.author == self.bot.user:
                 # メンションを除去した内容を作成
                 content_wo_mentions = re.sub(
-                    r"<@!?[0-9]+>", "", message.content
+                    r"<@!?[0-9]+>|<@&[0-9]+>", "", message.content
                 ).strip()
+
+                # content_wo_mentionsにマッチしない場合
+                if not content_wo_mentions:
+                    continue
+
                 # 元メッセージを編集してメンションを消す
                 try:
                     await message.edit(content=content_wo_mentions)
                 except Exception as e:
                     self.logger.error(f"メッセージ編集失敗: {e}")
-                # メンションだけを再送信
-                mentions_str = " ".join(m.mention for m in message.mentions)
-                if mentions_str:
-                    try:
-                        await thread.send(mentions_str)
-                    except Exception as e:
-                        self.logger.error(f"メンション再送信失敗: {e}")
+
+                # DBからメンション対象のロールを取得
+                role_ids = await self.notify_setting.return_notified(thread.guild.id)
+
+                role_mentions = []
+                if role_ids is None:
+                    self.logger.warning(
+                        f"スレッド{thread.name}の通知ロールが設定されていません"
+                    )
+                    return
+                else:
+                    for role_id in role_ids:
+                        role = thread.guild.get_role(role_id)
+                        if role is not None:
+                            role_mentions.append(role.mention)
+
+                if role_mentions:
+                    # roleのメンションにcontent_wo_mentionsを足して送る
+                    content = f"{' '.join(role_mentions)} {content_wo_mentions}"
+                    await message.edit(content=content)
                 break
 
     async def close_command(self, interaction: discord.Interaction):

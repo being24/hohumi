@@ -452,6 +452,23 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         await self.thread_commands.close_after_command(interaction, duration)
 
     @app_commands.command(
+        name="reinvite_notify_roles",
+        description="このスレッドの自動参加役職を再招待します",
+    )
+    @commands.has_permissions(manage_guild=True)
+    @app_commands.guild_only()
+    async def reinvite_notify_roles(self, interaction: discord.Interaction):
+        """このスレッドの自動参加役職を再招待するスラッシュコマンド"""
+        if not isinstance(interaction.channel, discord.Thread):
+            await interaction.response.send_message(
+                "このコマンドはスレッドチャンネル専用です", ephemeral=True
+            )
+            return
+        await interaction.response.defer(thinking=True)
+        await self.thread_commands.remove_mentions_and_readd(thread=interaction.channel)
+        await interaction.followup.send("自動参加役職を再招待しました")
+
+    @app_commands.command(
         name="show_notify_roles", description="現在自動参加させる役職を表示します"
     )
     @app_commands.guild_only()
@@ -503,6 +520,32 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
             return
         ctx = await commands.Context.from_interaction(interaction)
         await self.thread_commands.resister_notify_command(ctx)
+
+    @app_commands.command(
+        name="reinvite_notify_roles_all",
+        description="このサーバー内の全スレッドの自動参加役職を再招待します",
+    )
+    @commands.has_permissions(manage_guild=True)
+    @app_commands.guild_only()
+    async def reinvite_notify_roles_all(self, interaction: discord.Interaction):
+        """このサーバー内の全スレッドの自動参加役職を再招待するスラッシュコマンド"""
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "このコマンドはサーバー専用です", ephemeral=True
+            )
+            return
+        count = 0
+        await interaction.response.defer(thinking=True)
+        for thread in interaction.guild.threads:
+            try:
+                await self.thread_commands.remove_mentions_and_readd(thread)
+                count += 1
+                await asyncio.sleep(2)  # レートリミット対策
+            except Exception as e:
+                self.logger.error(f"スレッド{thread.name}の自動参加役職再招待失敗: {e}")
+        await interaction.followup.send(
+            f"自動参加役職を{count}件のスレッドで再招待しました"
+        )
 
 
 async def setup(bot):
