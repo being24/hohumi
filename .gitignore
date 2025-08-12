@@ -140,3 +140,4 @@ token
 *.ipynb
 .env.*
 discord.log*
+docs_markdown/*

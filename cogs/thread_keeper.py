@@ -4,7 +4,8 @@
 
 import asyncio
 import logging
-from datetime import timedelta
+import re
+from datetime import datetime, timedelta
 
 import discord
 from discord import app_commands
@@ -106,6 +107,15 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
             waiting = discord.utils.get(thread.parent.available_tags, name="対応待ち")
             if waiting is not None and waiting not in thread.applied_tags:
                 await thread.add_tags(waiting)
+
+        # スレッド名の末尾に今日の日付（YYMMDD形式）を追加（既に付いていれば追加しない）
+        today_str = datetime.now().strftime("%y%m%d")
+        date_pattern = r"\\d{6}$"
+        if not re.search(date_pattern, thread.name):
+            try:
+                await thread.edit(name=f"{thread.name}{today_str}")
+            except Exception as e:
+                self.logger.error(f"スレッド名の日付付与失敗: {e}")
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -244,14 +254,18 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
             return
 
         # 通知メッセージを送信
-        message = self._build_archive_message(after.name, after.archived, log)
+        message = self._build_archive_message(
+            before.name, after.archived, before.jump_url, log
+        )
         await self._send_archive_notification(after, message)
 
         # アーカイブ解除時にCLOSEDプレフィックスを削除
         if not after.archived:
             await self._remove_closed_prefix(after)
 
-    async def _get_recent_thread_audit_log(self, guild: discord.Guild):
+    async def _get_recent_thread_audit_log(
+        self, guild: discord.Guild
+    ) -> discord.AuditLogEntry | None:
         """最近のスレッド更新監査ログを取得"""
         try:
             logs = [
@@ -274,14 +288,21 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         """アーカイブ通知の必要条件を検証"""
         return log is not None and log.user is not None and self.bot.user is not None
 
-    def _build_archive_message(self, thread_name: str, is_archived: bool, log) -> str:
+    def _build_archive_message(
+        self,
+        thread_name: str,
+        is_archived: bool,
+        thread_url: str,
+        log: discord.AuditLogEntry | None,
+    ) -> str:
         """アーカイブ通知メッセージを構築"""
         action = "閉架" if is_archived else "閉架が解除"
 
+        thread_link = f"[{thread_name}]({thread_url})"
         if log is None:
-            return f"{thread_name}は{action}されました。"
+            return f"{thread_link}は{action}されました。"
         else:
-            return f"{log.user}によって{thread_name}は{action}されました。"
+            return f"{log.user}によって{thread_link}は{action}されました。"
 
     async def _send_archive_notification(self, thread: discord.Thread, message: str):
         """アーカイブ通知を送信"""
@@ -429,6 +450,102 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
     ):
         """スレッドを指定時間後に自動閉架するよう設定するコマンド"""
         await self.thread_commands.close_after_command(interaction, duration)
+
+    @app_commands.command(
+        name="reinvite_notify_roles",
+        description="このスレッドの自動参加役職を再招待します",
+    )
+    @commands.has_permissions(manage_guild=True)
+    @app_commands.guild_only()
+    async def reinvite_notify_roles(self, interaction: discord.Interaction):
+        """このスレッドの自動参加役職を再招待するスラッシュコマンド"""
+        if not isinstance(interaction.channel, discord.Thread):
+            await interaction.response.send_message(
+                "このコマンドはスレッドチャンネル専用です", ephemeral=True
+            )
+            return
+        await interaction.response.defer(thinking=True)
+        await self.thread_commands.remove_mentions_and_readd(thread=interaction.channel)
+        await interaction.followup.send("自動参加役職を再招待しました")
+
+    @app_commands.command(
+        name="show_notify_roles", description="現在自動参加させる役職を表示します"
+    )
+    @app_commands.guild_only()
+    async def show_notify_roles(self, interaction: discord.Interaction):
+        """現在自動参加させる役職を表示するスラッシュコマンド"""
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "このコマンドはサーバー専用です", ephemeral=True
+            )
+            return
+        role_ids = await self.notify_role.return_notified(interaction.guild.id)
+        if not role_ids:
+            await interaction.response.send_message(
+                "自動参加させる役職は設定されていません"
+            )
+            return
+        role_mentions = []
+        for role_id in role_ids:
+            role = interaction.guild.get_role(role_id)
+            if role is not None:
+                role_mentions.append(role.mention)
+        if role_mentions:
+            await interaction.response.send_message(
+                f"現在自動参加させる役職: {', '.join(role_mentions)}"
+            )
+        else:
+            await interaction.response.send_message(
+                "設定されている役職が見つかりません", ephemeral=True
+            )
+
+    @app_commands.command(
+        name="set_notify_roles",
+        description="スレッド作成時に自動参加させる役職を選択できます",
+    )
+    @app_commands.describe(
+        delete_all="既存の自動参加役職を全て削除する（デフォルト: False）"
+    )
+    @commands.has_permissions(manage_guild=True)
+    @app_commands.guild_only()
+    async def set_notify_roles(
+        self, interaction: discord.Interaction, delete_all: bool = False
+    ):
+        """スレッド作成時に自動参加させる役職を選択するスラッシュコマンド。delete_all=Trueで全削除"""
+        if delete_all:
+            if interaction.guild is None:
+                return
+            await self.notify_role.delete_notify(interaction.guild.id)
+            await interaction.response.send_message("自動参加役職を全て削除しました")
+            return
+        ctx = await commands.Context.from_interaction(interaction)
+        await self.thread_commands.resister_notify_command(ctx)
+
+    @app_commands.command(
+        name="reinvite_notify_roles_all",
+        description="このサーバー内の全スレッドの自動参加役職を再招待します",
+    )
+    @commands.has_permissions(manage_guild=True)
+    @app_commands.guild_only()
+    async def reinvite_notify_roles_all(self, interaction: discord.Interaction):
+        """このサーバー内の全スレッドの自動参加役職を再招待するスラッシュコマンド"""
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "このコマンドはサーバー専用です", ephemeral=True
+            )
+            return
+        count = 0
+        await interaction.response.defer(thinking=True)
+        for thread in interaction.guild.threads:
+            try:
+                await self.thread_commands.remove_mentions_and_readd(thread)
+                count += 1
+                await asyncio.sleep(2)  # レートリミット対策
+            except Exception as e:
+                self.logger.error(f"スレッド{thread.name}の自動参加役職再招待失敗: {e}")
+        await interaction.followup.send(
+            f"自動参加役職を{count}件のスレッドで再招待しました"
+        )
 
 
 async def setup(bot):
