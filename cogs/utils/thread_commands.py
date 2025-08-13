@@ -128,16 +128,29 @@ class ThreadCommands:
             self.logger.warning("guild is None @resister_notify")
             return
 
+        # 現在の設定を取得
+        current_role_ids = await self.notify_setting.return_notified(ctx.guild.id) or []
+
         class RoleSelect(discord.ui.Select):
-            def __init__(self, roles: list[discord.Role], view: discord.ui.View):
+            def __init__(
+                self,
+                roles: list[discord.Role],
+                view: discord.ui.View,
+                current_role_ids: list[int] | None = None,
+            ):
+                current_role_ids = current_role_ids or []
                 options = [
-                    discord.SelectOption(label=role.name, value=str(role.id))
+                    discord.SelectOption(
+                        label=role.name,
+                        value=str(role.id),
+                        default=role.id in current_role_ids,
+                    )
                     for role in roles
                     if not role.is_bot_managed()
                 ]
                 super().__init__(
                     placeholder="自動参加させる役職を選択（複数選択可）",
-                    min_values=1,
+                    min_values=0,  # 既存設定がある場合は0も許可
                     max_values=min(25, len(options)),
                     options=options,
                 )
@@ -159,18 +172,25 @@ class ThreadCommands:
                 )
 
         class RoleSelectView(discord.ui.View):
-            def __init__(self, thread_commands, roles, guild, timeout=60):
+            def __init__(
+                self,
+                thread_commands,
+                roles,
+                guild,
+                current_role_ids: list[int] | None = None,
+                timeout=60,
+            ):
                 super().__init__(timeout=timeout)
                 self.thread_commands = thread_commands
                 self.guild = guild
-                self.add_item(RoleSelect(roles, self))
+                self.add_item(RoleSelect(roles, self, current_role_ids))
 
         roles = [
             role
             for role in ctx.guild.roles
             if role < ctx.guild.me.top_role and not role.is_default()
         ]
-        view = RoleSelectView(self, roles, ctx.guild)
+        view = RoleSelectView(self, roles, ctx.guild, current_role_ids)
         await ctx.send("自動参加させる役職を選択してください（複数選択可）", view=view)
 
     async def get_notified_role_command(self, ctx: commands.Context):
