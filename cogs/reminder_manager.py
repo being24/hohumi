@@ -497,7 +497,7 @@ class ReminderExclusionCog(commands.Cog, name="リマインド除外管理"):
                 color=discord.Color.green(),
             )
 
-            await interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             await thread.send(
                 "リマインド対象ユーザーを追加/変更する場合は下のボタンを押してください",
                 view=view,
