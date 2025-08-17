@@ -355,7 +355,7 @@ class ThreadCommands:
 
         # 名前の長さ制限をチェック（Discordの制限は100文字）
         if len(new_name) > 100:
-            # プレフィックスを短縮するか、元の名前を切り詰める
+            # 元の名前を切り詰める
             max_original_length = 100 - len(self.config.CLOSED_THREAD_PREFIX)
             truncated_name = thread.name[:max_original_length]
             new_name = f"{self.config.CLOSED_THREAD_PREFIX}{truncated_name}"
@@ -395,9 +395,15 @@ class ThreadCommands:
 
         thread = interaction.channel
         duration_display = AutoArchiveDuration.get_display_name(duration)
+        new_name = f"{self.config.CLOSED_THREAD_PREFIX}{thread.name}"
+        if len(new_name) > 100:
+            # 元の名前を切り詰める
+            max_original_length = 100 - len(self.config.CLOSED_THREAD_PREFIX)
+            truncated_name = thread.name[:max_original_length]
+            new_name = f"{self.config.CLOSED_THREAD_PREFIX}{truncated_name}"
 
         try:
-            await thread.edit(auto_archive_duration=duration.value)  # type: ignore
+            await thread.edit(name=new_name, auto_archive_duration=duration.value)
 
             # DB上の保守対象からも除外
             if interaction.guild is not None:

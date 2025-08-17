@@ -203,6 +203,9 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
             if self._is_closed_prefix_change(before.name, after.name) or after.archived:
                 return
 
+            if self._is_add_date_change(before.name, after.name):
+                return
+
             thread_kind = (
                 "スレッド"
                 if isinstance(before.parent, discord.TextChannel)
@@ -223,6 +226,12 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         return (prefix not in before_name and prefix in after_name) or (
             prefix in before_name and prefix not in after_name
         )
+
+    def _is_add_date_change(self, before_name: str, after_name: str) -> bool:
+        """スレッド名の末尾に作成日を付ける処理なのかを判定"""
+        # after_nameがbefore_name+YYMMDDで終わっているか判定
+        pattern = re.escape(before_name) + r"(\d{6})$"
+        return re.match(pattern, after_name) is not None
 
     async def _handle_thread_lock_change(self, thread: discord.Thread):
         """スレッドロック状態変更の処理"""
@@ -246,16 +255,9 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         if isinstance(after.parent, discord.ForumChannel):
             return
 
-        # 監査ログを取得してアーカイブ実行者を特定
-        log = await self._get_recent_thread_audit_log(after.guild)
-
-        # 必要な値がNullの場合は処理を中断
-        if not self._validate_archive_notification_requirements(log):
-            return
-
         # 通知メッセージを送信
         message = self._build_archive_message(
-            before.name, after.archived, before.jump_url, log
+            before.name, after.archived, before.jump_url
         )
         await self._send_archive_notification(after, message)
 
@@ -293,16 +295,13 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         thread_name: str,
         is_archived: bool,
         thread_url: str,
-        log: discord.AuditLogEntry | None,
     ) -> str:
         """アーカイブ通知メッセージを構築"""
         action = "閉架" if is_archived else "閉架が解除"
 
         thread_link = f"[{thread_name}]({thread_url})"
-        if log is None:
-            return f"{thread_link}は{action}されました。"
-        else:
-            return f"{log.user}によって{thread_link}は{action}されました。"
+
+        return f"{thread_link}は{action}されました。"
 
     async def _send_archive_notification(self, thread: discord.Thread, message: str):
         """アーカイブ通知を送信"""
