@@ -203,6 +203,9 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
             if self._is_closed_prefix_change(before.name, after.name) or after.archived:
                 return
 
+            if self._is_add_date_change(before.name, after.name):
+                return
+
             thread_kind = (
                 "スレッド"
                 if isinstance(before.parent, discord.TextChannel)
@@ -223,6 +226,12 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         return (prefix not in before_name and prefix in after_name) or (
             prefix in before_name and prefix not in after_name
         )
+
+    def _is_add_date_change(self, before_name: str, after_name: str) -> bool:
+        """スレッド名の末尾に作成日を付ける処理なのかを判定"""
+        # after_nameがbefore_name+YYMMDDで終わっているか判定
+        pattern = re.escape(before_name) + r"(\d{6})$"
+        return re.match(pattern, after_name) is not None
 
     async def _handle_thread_lock_change(self, thread: discord.Thread):
         """スレッドロック状態変更の処理"""
