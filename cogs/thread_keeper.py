@@ -538,10 +538,13 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         for thread in interaction.guild.threads:
             try:
                 await self.thread_commands.remove_mentions_and_readd(thread)
+                self.logger.warning("Reinvited notify roles in thread %s", thread.name)
                 count += 1
                 await asyncio.sleep(2)  # レートリミット対策
             except Exception as e:
-                self.logger.error(f"スレッド{thread.name}の自動参加役職再招待失敗: {e}")
+                self.logger.error(
+                    "スレッド%sの自動参加役職再招待失敗: %s", thread.name, e
+                )
         await interaction.followup.send(
             f"自動参加役職を{count}件のスレッドで再招待しました"
         )
