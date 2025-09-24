@@ -535,10 +535,12 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
             return
         count = 0
         await interaction.response.defer(thinking=True)
+        self.logger.info("Target threads number: %d", len(interaction.guild.threads))
+
         for thread in interaction.guild.threads:
             try:
                 await self.thread_commands.remove_mentions_and_readd(thread)
-                self.logger.warning("Reinvited notify roles in thread %s", thread.name)
+                # self.logger.info("Reinvited notify roles in thread %s", thread.name)
                 count += 1
                 await asyncio.sleep(2)  # レートリミット対策
             except Exception as e:
