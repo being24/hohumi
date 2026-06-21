@@ -436,6 +436,13 @@ class ThreadCommands:
                 "このスレッドには閉架予約がありません", ephemeral=True
             )
 
+    @staticmethod
+    def _to_discord_timestamp(dt: datetime | None, style: str = "F") -> str:
+        if dt is None:
+            return "なし"
+        unix = int(dt.timestamp())
+        return f"<t:{unix}:{style}>"
+
     async def thread_info_command(
         self, interaction: discord.Interaction, thread_id: str
     ):
@@ -486,25 +493,75 @@ class ThreadCommands:
         # 閉架予約の有無
         scheduled = await self.scheduled_closure_manager.get_closure(thread.id)
 
-        info_lines = [
-            f"**スレッド情報: {thread.name}**",
-            f"ID: `{thread.id}`",
-            f"取得元: {source}",
-            f"親チャンネル: {thread.parent.name if thread.parent else '不明'}",
-            f"タイプ: {thread.type}",
-            f"archived: `{thread.archived}`",
-            f"locked: `{thread.locked}`",
-            f"auto_archive_duration: `{thread.auto_archive_duration}分`",
-            f"archive_timestamp: `{thread.archive_timestamp}`",
-            f"created_at: `{thread.created_at}`",
-            f"member_count: `{thread.member_count}`",
-            f"message_count: `{thread.message_count}`",
-            f"[CLOSED]プレフィックス: `{self.config.CLOSED_THREAD_PREFIX in thread.name}`",
-            f"DB保守対象: `{is_maintenance}`",
-            f"閉架予約: `{scheduled.scheduled_close_time if scheduled else 'なし'}`",
-        ]
+        # ステータスに応じた色
+        if self.config.CLOSED_THREAD_PREFIX in thread.name:
+            color = discord.Color.dark_grey()
+            status = "閉架済み"
+        elif thread.archived:
+            color = discord.Color.orange()
+            status = "アーカイブ済み"
+        else:
+            color = discord.Color.green()
+            status = "アクティブ"
 
-        await interaction.followup.send("\n".join(info_lines))
+        ts = self._to_discord_timestamp
+
+        embed = discord.Embed(
+            title=thread.name,
+            description=f"{thread.mention}（{source}から取得）",
+            color=color,
+        )
+        embed.add_field(name="ステータス", value=status, inline=True)
+        embed.add_field(
+            name="タイプ", value=str(thread.type).replace("_", " "), inline=True
+        )
+        embed.add_field(
+            name="親チャンネル",
+            value=thread.parent.mention if thread.parent else "不明",
+            inline=True,
+        )
+        embed.add_field(name="archived", value=f"`{thread.archived}`", inline=True)
+        embed.add_field(name="locked", value=f"`{thread.locked}`", inline=True)
+        embed.add_field(
+            name="自動アーカイブ",
+            value=f"{thread.auto_archive_duration}分",
+            inline=True,
+        )
+        embed.add_field(
+            name="作成日時",
+            value=f"{ts(thread.created_at)} ({ts(thread.created_at, 'R')})",
+            inline=False,
+        )
+        embed.add_field(
+            name="アーカイブ予定",
+            value=f"{ts(thread.archive_timestamp)} ({ts(thread.archive_timestamp, 'R')})",
+            inline=False,
+        )
+        embed.add_field(
+            name="メンバー数", value=str(thread.member_count), inline=True
+        )
+        embed.add_field(
+            name="メッセージ数", value=str(thread.message_count), inline=True
+        )
+        embed.add_field(
+            name="[CLOSED]",
+            value="あり" if self.config.CLOSED_THREAD_PREFIX in thread.name else "なし",
+            inline=True,
+        )
+        embed.add_field(
+            name="DB保守対象", value="対象" if is_maintenance else "対象外", inline=True
+        )
+
+        if scheduled:
+            embed.add_field(
+                name="閉架予約",
+                value=f"{ts(scheduled.scheduled_close_time)} ({ts(scheduled.scheduled_close_time, 'R')})",
+                inline=False,
+            )
+
+        embed.set_footer(text=f"ID: {thread.id}")
+
+        await interaction.followup.send(embed=embed)
 
     async def close_archived_command(self, interaction: discord.Interaction):
         """アーカイブ済みで[CLOSED]が付いていないスレッドを一括閉架するコマンドの実装"""
