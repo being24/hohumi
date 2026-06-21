@@ -435,3 +435,73 @@ class ThreadCommands:
             await interaction.response.send_message(
                 "このスレッドには閉架予約がありません", ephemeral=True
             )
+
+    async def thread_info_command(
+        self, interaction: discord.Interaction, thread_id: str
+    ):
+        """スレッドの内部状態を表示する診断コマンドの実装"""
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "このコマンドはサーバー専用です", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer()
+
+        try:
+            tid = int(thread_id)
+        except ValueError:
+            await interaction.followup.send("無効なスレッドIDです", ephemeral=True)
+            return
+
+        # キャッシュから取得を試みる
+        thread = interaction.guild.get_thread(tid)
+        source = "キャッシュ"
+
+        # キャッシュにない場合はAPIから取得
+        if thread is None:
+            try:
+                thread = await interaction.guild.fetch_channel(tid)
+                source = "API fetch"
+            except discord.NotFound:
+                await interaction.followup.send(
+                    f"スレッド {tid} は見つかりませんでした（削除済みの可能性）"
+                )
+                return
+            except Exception as e:
+                await interaction.followup.send(f"取得エラー: {e}")
+                return
+
+        if not isinstance(thread, discord.Thread):
+            await interaction.followup.send(
+                f"ID {tid} はスレッドではありません（type: {type(thread).__name__}）"
+            )
+            return
+
+        # DB上の保守対象かどうか
+        is_maintenance = await self.channel_data_manager.is_maintenance_channel(
+            thread.id, guild_id=interaction.guild.id
+        )
+
+        # 閉架予約の有無
+        scheduled = await self.scheduled_closure_manager.get_closure(thread.id)
+
+        info_lines = [
+            f"**スレッド情報: {thread.name}**",
+            f"ID: `{thread.id}`",
+            f"取得元: {source}",
+            f"親チャンネル: {thread.parent.name if thread.parent else '不明'}",
+            f"タイプ: {thread.type}",
+            f"archived: `{thread.archived}`",
+            f"locked: `{thread.locked}`",
+            f"auto_archive_duration: `{thread.auto_archive_duration}分`",
+            f"archive_timestamp: `{thread.archive_timestamp}`",
+            f"created_at: `{thread.created_at}`",
+            f"member_count: `{thread.member_count}`",
+            f"message_count: `{thread.message_count}`",
+            f"[CLOSED]プレフィックス: `{self.config.CLOSED_THREAD_PREFIX in thread.name}`",
+            f"DB保守対象: `{is_maintenance}`",
+            f"閉架予約: `{scheduled.scheduled_close_time if scheduled else 'なし'}`",
+        ]
+
+        await interaction.followup.send("\n".join(info_lines))

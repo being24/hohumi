@@ -517,6 +517,17 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         await self.thread_commands.cancel_close_command(interaction)
 
     @app_commands.command(
+        name="thread_info",
+        description="スレッドの内部状態を表示します（診断用）",
+    )
+    @app_commands.describe(thread_id="調査するスレッドのID")
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
+    async def thread_info(self, interaction: discord.Interaction, thread_id: str):
+        """スレッドの内部状態を表示する診断コマンド"""
+        await self.thread_commands.thread_info_command(interaction, thread_id)
+
+    @app_commands.command(
         name="reinvite_notify_roles",
         description="このスレッドの自動参加役職を再招待します",
     )
