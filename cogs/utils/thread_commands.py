@@ -563,29 +563,23 @@ class ThreadCommands:
 
         await interaction.followup.send(embed=embed)
 
-    async def _collect_archived_threads(
+    def _collect_stale_threads(
         self, guild: discord.Guild
     ) -> list[discord.Thread]:
-        """アーカイブ済みで[CLOSED]が付いていないスレッドを収集する"""
+        """未アーカイブだがアーカイブ予定時刻を過ぎているスレッドを収集する"""
+        now = discord.utils.utcnow()
         targets = []
-        for channel in guild.channels:
-            if not isinstance(channel, (discord.TextChannel, discord.ForumChannel)):
+        for thread in guild.threads:
+            if thread.archived:
                 continue
-            try:
-                for private in [False, True]:
-                    async for thread in channel.archived_threads(
-                        limit=None, private=private
-                    ):
-                        if self.config.CLOSED_THREAD_PREFIX not in thread.name:
-                            targets.append(thread)
-            except discord.Forbidden:
-                self.logger.warning(
-                    f"No permission to access archived threads in {channel.name}"
-                )
+            if self.config.CLOSED_THREAD_PREFIX in thread.name:
+                continue
+            if thread.archive_timestamp and thread.archive_timestamp < now:
+                targets.append(thread)
         return targets
 
-    async def close_archived_command(self, interaction: discord.Interaction):
-        """アーカイブ済みで[CLOSED]が付いていないスレッドを一括閉架するコマンドの実装"""
+    async def close_stale_command(self, interaction: discord.Interaction):
+        """アーカイブ予定を過ぎた未アーカイブスレッドを一括閉架するコマンドの実装"""
         if interaction.guild is None:
             await interaction.response.send_message(
                 "このコマンドはサーバー専用です", ephemeral=True
@@ -594,7 +588,18 @@ class ThreadCommands:
 
         await interaction.response.defer()
 
-        targets = await self._collect_archived_threads(interaction.guild)
+        targets = self._collect_stale_threads(interaction.guild)
+
+        # ターミナルに一覧表示
+        self.logger.info(f"=== close_stale: {len(targets)}件検出 ===")
+        for thread in targets:
+            parent_name = thread.parent.name if thread.parent else "不明"
+            self.logger.info(
+                f"  {thread.name} ({parent_name}) "
+                f"archive_timestamp={thread.archive_timestamp} "
+                f"id={thread.id}"
+            )
+        self.logger.info("=== close_stale: 一覧終了 ===")
 
         if not targets:
             await interaction.followup.send("対象のスレッドはありませんでした")
@@ -602,10 +607,8 @@ class ThreadCommands:
 
         ts = self._to_discord_timestamp
 
-        # 一覧Embedを構築
         embed = discord.Embed(
-            title="閉架対象のアーカイブ済みスレッド",
-            description=f"{len(targets)}件のスレッドが見つかりました。閉架しますか？",
+            title="閉架対象の滞留スレッド",
             color=discord.Color.orange(),
         )
 
@@ -614,7 +617,7 @@ class ThreadCommands:
             parent_name = thread.parent.name if thread.parent else "不明"
             lines.append(
                 f"• **{thread.name}** ({parent_name}) "
-                f"— アーカイブ: {ts(thread.archive_timestamp, 'R')}"
+                f"— 期限: {ts(thread.archive_timestamp, 'R')}"
             )
 
         description_body = "\n".join(lines)
@@ -643,29 +646,12 @@ class ThreadCommands:
                 error_count = 0
 
                 for thread in targets:
-                    new_name = (
-                        f"{thread_commands.config.CLOSED_THREAD_PREFIX}{thread.name}"
-                    )
-                    if len(new_name) > 100:
-                        max_len = 100 - len(
-                            thread_commands.config.CLOSED_THREAD_PREFIX
-                        )
-                        new_name = (
-                            f"{thread_commands.config.CLOSED_THREAD_PREFIX}"
-                            f"{thread.name[:max_len]}"
-                        )
-
                     try:
-                        await thread.edit(name=new_name, archived=True)
-                        await thread_commands.channel_data_manager.set_maintenance_channel(
-                            channel_id=thread.id,
-                            guild_id=thread.guild.id,
-                            tf=False,
-                        )
+                        await thread_commands._execute_thread_close(thread)
                         closed_count += 1
                     except Exception as e:
                         thread_commands.logger.error(
-                            f"Error closing archived thread {thread.id}: {e}"
+                            f"Error closing stale thread {thread.id}: {e}"
                         )
                         error_count += 1
 
@@ -690,5 +676,3 @@ class ThreadCommands:
                 await button_interaction.response.edit_message(
                     content="キャンセルしました", embed=None, view=None
                 )
-
-        await interaction.followup.send(embed=embed, view=ConfirmView())
