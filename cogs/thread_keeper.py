@@ -304,6 +304,22 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         """アーカイブ通知の必要条件を検証"""
         return log is not None and log.user is not None and self.bot.user is not None
 
+    @staticmethod
+    def _strip_emojis(text: str) -> str:
+        """Unicode絵文字とDiscordカスタム絵文字を除去する"""
+        # Discordカスタム絵文字 <:name:id> <a:name:id>
+        text = re.sub(r"<a?:\w+:\d+>", "", text)
+        # Unicode絵文字
+        text = re.sub(
+            r"[\U0001F000-\U0001FFFF"
+            r"☀-➿"
+            r"︀-️"
+            r"‍]+",
+            "",
+            text,
+        )
+        return text.strip()
+
     def _build_archive_message(
         self,
         thread_name: str,
@@ -313,7 +329,8 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         """アーカイブ通知メッセージを構築"""
         action = "閉架" if is_archived else "閉架が解除"
 
-        thread_link = f"[{thread_name}]({thread_url})"
+        clean_name = self._strip_emojis(thread_name)
+        thread_link = f"[{clean_name}]({thread_url})"
 
         return f"{thread_link}は{action}されました。"
 
