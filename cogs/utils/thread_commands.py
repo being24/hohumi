@@ -563,6 +563,27 @@ class ThreadCommands:
 
         await interaction.followup.send(embed=embed)
 
+    async def _collect_archived_threads(
+        self, guild: discord.Guild
+    ) -> list[discord.Thread]:
+        """アーカイブ済みで[CLOSED]が付いていないスレッドを収集する"""
+        targets = []
+        for channel in guild.channels:
+            if not isinstance(channel, (discord.TextChannel, discord.ForumChannel)):
+                continue
+            try:
+                for private in [False, True]:
+                    async for thread in channel.archived_threads(
+                        limit=None, private=private
+                    ):
+                        if self.config.CLOSED_THREAD_PREFIX not in thread.name:
+                            targets.append(thread)
+            except discord.Forbidden:
+                self.logger.warning(
+                    f"No permission to access archived threads in {channel.name}"
+                )
+        return targets
+
     async def close_archived_command(self, interaction: discord.Interaction):
         """アーカイブ済みで[CLOSED]が付いていないスレッドを一括閉架するコマンドの実装"""
         if interaction.guild is None:
@@ -573,53 +594,101 @@ class ThreadCommands:
 
         await interaction.response.defer()
 
-        closed_count = 0
-        error_count = 0
+        targets = await self._collect_archived_threads(interaction.guild)
 
-        for channel in interaction.guild.channels:
-            if not isinstance(channel, (discord.TextChannel, discord.ForumChannel)):
-                continue
+        if not targets:
+            await interaction.followup.send("対象のスレッドはありませんでした")
+            return
 
-            try:
-                for private in [False, True]:
-                    async for thread in channel.archived_threads(
-                        limit=None, private=private
-                    ):
-                        if self.config.CLOSED_THREAD_PREFIX in thread.name:
-                            continue
+        ts = self._to_discord_timestamp
 
-                        new_name = (
-                            f"{self.config.CLOSED_THREAD_PREFIX}{thread.name}"
+        # 一覧Embedを構築
+        embed = discord.Embed(
+            title="閉架対象のアーカイブ済みスレッド",
+            description=f"{len(targets)}件のスレッドが見つかりました。閉架しますか？",
+            color=discord.Color.orange(),
+        )
+
+        lines = []
+        for thread in targets:
+            parent_name = thread.parent.name if thread.parent else "不明"
+            lines.append(
+                f"• **{thread.name}** ({parent_name}) "
+                f"— アーカイブ: {ts(thread.archive_timestamp, 'R')}"
+            )
+
+        description_body = "\n".join(lines)
+        if len(description_body) > 4000:
+            description_body = description_body[:4000] + "\n…（省略）"
+
+        embed.description = (
+            f"{len(targets)}件のスレッドが見つかりました。閉架しますか？\n\n"
+            + description_body
+        )
+
+        thread_commands = self
+
+        class ConfirmView(discord.ui.View):
+            def __init__(self):
+                super().__init__(timeout=60)
+
+            @discord.ui.button(label="閉架する", style=discord.ButtonStyle.danger)
+            async def confirm(
+                self, button_interaction: discord.Interaction, button: discord.ui.Button
+            ):
+                await button_interaction.response.defer()
+                self.stop()
+
+                closed_count = 0
+                error_count = 0
+
+                for thread in targets:
+                    new_name = (
+                        f"{thread_commands.config.CLOSED_THREAD_PREFIX}{thread.name}"
+                    )
+                    if len(new_name) > 100:
+                        max_len = 100 - len(
+                            thread_commands.config.CLOSED_THREAD_PREFIX
                         )
-                        if len(new_name) > 100:
-                            max_len = 100 - len(self.config.CLOSED_THREAD_PREFIX)
-                            new_name = (
-                                f"{self.config.CLOSED_THREAD_PREFIX}"
-                                f"{thread.name[:max_len]}"
-                            )
+                        new_name = (
+                            f"{thread_commands.config.CLOSED_THREAD_PREFIX}"
+                            f"{thread.name[:max_len]}"
+                        )
 
-                        try:
-                            await thread.edit(name=new_name, archived=True)
-                            await self.channel_data_manager.set_maintenance_channel(
-                                channel_id=thread.id,
-                                guild_id=interaction.guild.id,
-                                tf=False,
-                            )
-                            closed_count += 1
-                        except Exception as e:
-                            self.logger.error(
-                                f"Error closing archived thread {thread.id}: {e}"
-                            )
-                            error_count += 1
+                    try:
+                        await thread.edit(name=new_name, archived=True)
+                        await thread_commands.channel_data_manager.set_maintenance_channel(
+                            channel_id=thread.id,
+                            guild_id=thread.guild.id,
+                            tf=False,
+                        )
+                        closed_count += 1
+                    except Exception as e:
+                        thread_commands.logger.error(
+                            f"Error closing archived thread {thread.id}: {e}"
+                        )
+                        error_count += 1
 
-                        await asyncio.sleep(1)
+                    await asyncio.sleep(1)
 
-            except discord.Forbidden:
-                self.logger.warning(
-                    f"No permission to access archived threads in {channel.name}"
+                result = f"閉架完了: {closed_count}件"
+                if error_count > 0:
+                    result += f"\nエラー: {error_count}件"
+
+                result_embed = discord.Embed(
+                    title="一括閉架完了",
+                    description=result,
+                    color=discord.Color.green(),
+                )
+                await button_interaction.followup.send(embed=result_embed)
+
+            @discord.ui.button(label="キャンセル", style=discord.ButtonStyle.secondary)
+            async def cancel(
+                self, button_interaction: discord.Interaction, button: discord.ui.Button
+            ):
+                self.stop()
+                await button_interaction.response.edit_message(
+                    content="キャンセルしました", embed=None, view=None
                 )
 
-        message = f"アーカイブ済みスレッドの閉架が完了しました。\n閉架: {closed_count}件"
-        if error_count > 0:
-            message += f"\nエラー: {error_count}件"
-        await interaction.followup.send(message)
+        await interaction.followup.send(embed=embed, view=ConfirmView())
