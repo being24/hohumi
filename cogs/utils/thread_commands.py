@@ -566,32 +566,21 @@ class ThreadCommands:
     async def _collect_stale_threads(
         self, guild: discord.Guild
     ) -> list[discord.Thread]:
-        """未アーカイブだがアーカイブ予定時刻を過ぎているスレッドを収集する"""
-        now = discord.utils.utcnow()
+        """閉架済み（名前にCLOSED_THREAD_PREFIX）だがアーカイブされていないスレッドを収集する"""
         targets = []
         seen_ids: set[int] = set()
 
-        # キャッシュから
         for thread in guild.threads:
-            if thread.archived:
-                continue
-            if self.config.CLOSED_THREAD_PREFIX in thread.name:
-                continue
-            if thread.archive_timestamp and thread.archive_timestamp < now:
+            if self.config.CLOSED_THREAD_PREFIX in thread.name and not thread.archived:
                 targets.append(thread)
                 seen_ids.add(thread.id)
 
-        # APIから全アクティブスレッドを取得（キャッシュにないものを補完）
         try:
             all_active = await guild.active_threads()
             for thread in all_active:
                 if thread.id in seen_ids:
                     continue
-                if thread.archived:
-                    continue
-                if self.config.CLOSED_THREAD_PREFIX in thread.name:
-                    continue
-                if thread.archive_timestamp and thread.archive_timestamp < now:
+                if self.config.CLOSED_THREAD_PREFIX in thread.name and not thread.archived:
                     targets.append(thread)
                     seen_ids.add(thread.id)
         except Exception as e:
@@ -600,7 +589,7 @@ class ThreadCommands:
         return targets
 
     async def close_stale_command(self, interaction: discord.Interaction):
-        """アーカイブ予定を過ぎた滞留スレッドを一覧表示するコマンドの実装"""
+        """閉架済みだがアーカイブされていないスレッドを一覧表示するコマンドの実装"""
         if interaction.guild is None:
             await interaction.response.send_message(
                 "このコマンドはサーバー専用です", ephemeral=True
@@ -611,14 +600,12 @@ class ThreadCommands:
 
         targets = await self._collect_stale_threads(interaction.guild)
 
-        # ターミナルに一覧表示
         self.logger.info(f"=== close_stale: {len(targets)}件検出 ===")
         for thread in targets:
             parent_name = thread.parent.name if thread.parent else "不明"
             self.logger.info(
                 f"  {thread.name} ({parent_name}) "
                 f"archived={thread.archived} "
-                f"archive_timestamp={thread.archive_timestamp} "
                 f"id={thread.id}"
             )
         self.logger.info("=== close_stale: 一覧終了 ===")
@@ -627,20 +614,15 @@ class ThreadCommands:
             await interaction.followup.send("対象のスレッドはありませんでした")
             return
 
-        ts = self._to_discord_timestamp
-
         embed = discord.Embed(
-            title="滞留スレッド一覧",
+            title="閉架済み未アーカイブスレッド一覧",
             color=discord.Color.orange(),
         )
 
         lines = []
         for thread in targets:
             parent_name = thread.parent.name if thread.parent else "不明"
-            lines.append(
-                f"• **{thread.name}** ({parent_name}) "
-                f"— 期限: {ts(thread.archive_timestamp, 'R')}"
-            )
+            lines.append(f"• **{thread.name}** ({parent_name})")
 
         description_body = "\n".join(lines)
         if len(description_body) > 4000:
