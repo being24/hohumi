@@ -7,9 +7,6 @@ ENV TZ='Asia/Tokyo'
 
 # uv environment variables
 ENV UV_LINK_MODE=copy
-ENV UV_PROJECT_ENVIRONMENT='/usr/local/'
-ENV UV_SYSTEM_PYTHON=1
-
 
 WORKDIR /usr/src/${BOT_NAME}/
 COPY ./ ./
