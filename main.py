@@ -84,4 +84,4 @@ if __name__ == "__main__":
 
         use_sentry(bot, dsn=dsn, integrations=[AioHttpIntegration(), sentry_logging])
 
-    bot.run(token, log_handler=handler, log_formatter=formatter, log_level=logging.WARNING)
+    bot.run(token, log_handler=handler, log_formatter=formatter, log_level=logging.INFO)

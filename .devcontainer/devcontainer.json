@@ -23,6 +23,11 @@
 			]
 		}
 	},
+	// Mount .codex to the container from the host machine, so that the container can use the same codex configuration as the host.
+	"mounts": [
+		"source=${localEnv:HOME}/.codex,target=/root/.codex,type=bind",
+		"source=${localEnv:HOME}/.claude,target=/root/.claude,type=bind"
+	],
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
@@ -32,5 +37,6 @@
 	// "customizations": {},
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	"remoteUser": "root",
-	"postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}"
+	"postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && uv sync",
+	"workspaceFolder": "/workspaces/hohumi"
 }

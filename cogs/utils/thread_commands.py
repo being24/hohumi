@@ -5,6 +5,7 @@
 import asyncio
 import logging
 import re
+from datetime import datetime, timedelta
 
 import discord
 from discord.ext import commands
@@ -12,6 +13,7 @@ from discord.ext import commands
 from .common import CommonUtil
 from .guild_setting import GuildSettingManager
 from .notify_role import NotifySettingManager
+from .scheduled_closures import ScheduledClosureManager
 from .thread_channels import ChannelDataManager
 from .thread_config import AutoArchiveDuration, ThreadKeeperConfig
 from .thread_management import ThreadManager
@@ -31,6 +33,7 @@ class ThreadCommands:
         self.guild_setting_mng = GuildSettingManager()
         self.notify_setting = NotifySettingManager()
         self.channel_data_manager = ChannelDataManager()
+        self.scheduled_closure_manager = ScheduledClosureManager()
 
     # ======== スレッド管理コマンド ========
 
@@ -342,6 +345,31 @@ class ThreadCommands:
                     await message.edit(content=content)
                 break
 
+    async def _execute_thread_close(self, thread: discord.Thread) -> bool:
+        """スレッドを閉架する共通処理（close_command と定期タスクの両方から利用）"""
+        new_name = f"{self.config.CLOSED_THREAD_PREFIX}{thread.name}"
+
+        if len(new_name) > 100:
+            max_original_length = 100 - len(self.config.CLOSED_THREAD_PREFIX)
+            truncated_name = thread.name[:max_original_length]
+            new_name = f"{self.config.CLOSED_THREAD_PREFIX}{truncated_name}"
+
+        try:
+            await thread.edit(name=new_name, archived=True)
+
+            await self.channel_data_manager.set_maintenance_channel(
+                channel_id=thread.id,
+                guild_id=thread.guild.id,
+                tf=False,
+            )
+            return True
+        except discord.Forbidden:
+            self.logger.error(f"No permission to close thread {thread.id}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error closing thread {thread.id}: {e}")
+            return False
+
     async def close_command(self, interaction: discord.Interaction):
         """スレッドを閉架するコマンドの実装"""
         if not isinstance(interaction.channel, discord.Thread):
@@ -351,37 +379,13 @@ class ThreadCommands:
             return
 
         thread = interaction.channel
-        new_name = f"{self.config.CLOSED_THREAD_PREFIX}{thread.name}"
 
-        # 名前の長さ制限をチェック（Discordの制限は100文字）
-        if len(new_name) > 100:
-            # 元の名前を切り詰める
-            max_original_length = 100 - len(self.config.CLOSED_THREAD_PREFIX)
-            truncated_name = thread.name[:max_original_length]
-            new_name = f"{self.config.CLOSED_THREAD_PREFIX}{truncated_name}"
+        # 閉架予約があればキャンセル
+        await self.scheduled_closure_manager.cancel_closure(thread_id=thread.id)
 
-        try:
-            await interaction.response.send_message("スレッドを閉架します...")
-            await asyncio.sleep(1)  # 少し待機してから閉架処理を行う
-            await thread.edit(name=new_name, archived=True)
-
-            # DB上の保守対象からも除外
-            if interaction.guild is not None:
-                await self.channel_data_manager.set_maintenance_channel(
-                    channel_id=thread.id,
-                    guild_id=interaction.guild.id,
-                    tf=False,
-                )
-
-        except discord.Forbidden:
-            await interaction.response.send_message(
-                "スレッドを閉架する権限がありません", ephemeral=True
-            )
-        except Exception as e:
-            self.logger.error(f"Error closing thread {thread.id}: {e}")
-            await interaction.response.send_message(
-                "スレッドの閉架中にエラーが発生しました", ephemeral=True
-            )
+        await interaction.response.send_message("スレッドを閉架します...")
+        await asyncio.sleep(1)
+        await self._execute_thread_close(thread)
 
     async def close_after_command(
         self, interaction: discord.Interaction, duration: AutoArchiveDuration
@@ -393,35 +397,255 @@ class ThreadCommands:
             )
             return
 
+        if interaction.guild is None:
+            self.logger.warning("guild is None @close_after_command")
+            return
+
         thread = interaction.channel
         duration_display = AutoArchiveDuration.get_display_name(duration)
-        new_name = f"{self.config.CLOSED_THREAD_PREFIX}{thread.name}"
-        if len(new_name) > 100:
-            # 元の名前を切り詰める
-            max_original_length = 100 - len(self.config.CLOSED_THREAD_PREFIX)
-            truncated_name = thread.name[:max_original_length]
-            new_name = f"{self.config.CLOSED_THREAD_PREFIX}{truncated_name}"
+        scheduled_close_time = datetime.now() + timedelta(minutes=duration.value)
+
+        await self.scheduled_closure_manager.schedule_closure(
+            thread_id=thread.id,
+            guild_id=interaction.guild.id,
+            scheduled_close_time=scheduled_close_time,
+            created_by=interaction.user.id,
+        )
+
+        formatted_time = scheduled_close_time.strftime("%Y/%m/%d %H:%M")
+        await interaction.response.send_message(
+            f"このスレッドは{duration_display}後（{formatted_time}）に閉架予定です"
+        )
+
+    async def cancel_close_command(self, interaction: discord.Interaction):
+        """閉架予約をキャンセルするコマンドの実装"""
+        if not isinstance(interaction.channel, discord.Thread):
+            await interaction.response.send_message(
+                "このコマンドはスレッドチャンネル専用です", ephemeral=True
+            )
+            return
+
+        cancelled = await self.scheduled_closure_manager.cancel_closure(
+            thread_id=interaction.channel.id
+        )
+
+        if cancelled:
+            await interaction.response.send_message("閉架予約をキャンセルしました")
+        else:
+            await interaction.response.send_message(
+                "このスレッドには閉架予約がありません", ephemeral=True
+            )
+
+    @staticmethod
+    def _to_discord_timestamp(dt: datetime | None, style: str = "F") -> str:
+        if dt is None:
+            return "なし"
+        unix = int(dt.timestamp())
+        return f"<t:{unix}:{style}>"
+
+    async def thread_info_command(
+        self, interaction: discord.Interaction, thread_id: str
+    ):
+        """スレッドの内部状態を表示する診断コマンドの実装"""
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "このコマンドはサーバー専用です", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer()
 
         try:
-            await thread.edit(name=new_name, auto_archive_duration=duration.value)
+            tid = int(thread_id)
+        except ValueError:
+            await interaction.followup.send("無効なスレッドIDです", ephemeral=True)
+            return
 
-            # DB上の保守対象からも除外
-            if interaction.guild is not None:
-                await self.channel_data_manager.set_maintenance_channel(
-                    channel_id=thread.id,
-                    guild_id=interaction.guild.id,
-                    tf=False,
+        # キャッシュから取得を試みる
+        thread = interaction.guild.get_thread(tid)
+        source = "キャッシュ"
+
+        # キャッシュにない場合はAPIから取得
+        if thread is None:
+            try:
+                thread = await interaction.guild.fetch_channel(tid)
+                source = "API fetch"
+            except discord.NotFound:
+                await interaction.followup.send(
+                    f"スレッド {tid} は見つかりませんでした（削除済みの可能性）"
                 )
+                return
+            except Exception as e:
+                await interaction.followup.send(f"取得エラー: {e}")
+                return
 
-            await interaction.response.send_message(
-                f"スレッドが{duration_display}後に自動的に閉架されるように設定しました"
+        if not isinstance(thread, discord.Thread):
+            await interaction.followup.send(
+                f"ID {tid} はスレッドではありません（type: {type(thread).__name__}）"
             )
-        except discord.Forbidden:
-            await interaction.response.send_message(
-                "スレッドの設定を変更する権限がありません", ephemeral=True
+            return
+
+        # DB上の保守対象かどうか
+        is_maintenance = await self.channel_data_manager.is_maintenance_channel(
+            thread.id, guild_id=interaction.guild.id
+        )
+
+        # 閉架予約の有無
+        scheduled = await self.scheduled_closure_manager.get_closure(thread.id)
+
+        # ステータスに応じた色
+        if self.config.CLOSED_THREAD_PREFIX in thread.name:
+            color = discord.Color.dark_grey()
+            status = "閉架済み"
+        elif thread.archived:
+            color = discord.Color.orange()
+            status = "アーカイブ済み"
+        else:
+            color = discord.Color.green()
+            status = "アクティブ"
+
+        ts = self._to_discord_timestamp
+
+        embed = discord.Embed(
+            title=thread.name,
+            description=f"{thread.mention}（{source}から取得）",
+            color=color,
+        )
+        embed.add_field(name="ステータス", value=status, inline=True)
+        embed.add_field(
+            name="タイプ", value=str(thread.type).replace("_", " "), inline=True
+        )
+        embed.add_field(
+            name="親チャンネル",
+            value=thread.parent.mention if thread.parent else "不明",
+            inline=True,
+        )
+        embed.add_field(name="archived", value=f"`{thread.archived}`", inline=True)
+        embed.add_field(name="locked", value=f"`{thread.locked}`", inline=True)
+        embed.add_field(
+            name="自動アーカイブ",
+            value=f"{thread.auto_archive_duration}分",
+            inline=True,
+        )
+        embed.add_field(
+            name="作成日時",
+            value=f"{ts(thread.created_at)} ({ts(thread.created_at, 'R')})",
+            inline=False,
+        )
+        embed.add_field(
+            name="アーカイブ予定",
+            value=f"{ts(thread.archive_timestamp)} ({ts(thread.archive_timestamp, 'R')})",
+            inline=False,
+        )
+        embed.add_field(
+            name="メンバー数", value=str(thread.member_count), inline=True
+        )
+        embed.add_field(
+            name="メッセージ数", value=str(thread.message_count), inline=True
+        )
+        embed.add_field(
+            name="[CLOSED]",
+            value="あり" if self.config.CLOSED_THREAD_PREFIX in thread.name else "なし",
+            inline=True,
+        )
+        embed.add_field(
+            name="DB保守対象", value="対象" if is_maintenance else "対象外", inline=True
+        )
+
+        if scheduled:
+            embed.add_field(
+                name="閉架予約",
+                value=f"{ts(scheduled.scheduled_close_time)} ({ts(scheduled.scheduled_close_time, 'R')})",
+                inline=False,
             )
+
+        embed.set_footer(text=f"ID: {thread.id}")
+
+        await interaction.followup.send(embed=embed)
+
+    async def _collect_stale_threads(
+        self, guild: discord.Guild
+    ) -> list[discord.Thread]:
+        """未アーカイブだがアーカイブ予定時刻を過ぎているスレッドを収集する"""
+        now = discord.utils.utcnow()
+        targets = []
+        seen_ids: set[int] = set()
+
+        # キャッシュから
+        for thread in guild.threads:
+            if thread.archived:
+                continue
+            if self.config.CLOSED_THREAD_PREFIX in thread.name:
+                continue
+            if thread.archive_timestamp and thread.archive_timestamp < now:
+                targets.append(thread)
+                seen_ids.add(thread.id)
+
+        # APIから全アクティブスレッドを取得（キャッシュにないものを補完）
+        try:
+            all_active = await guild.active_threads()
+            for thread in all_active:
+                if thread.id in seen_ids:
+                    continue
+                if thread.archived:
+                    continue
+                if self.config.CLOSED_THREAD_PREFIX in thread.name:
+                    continue
+                if thread.archive_timestamp and thread.archive_timestamp < now:
+                    targets.append(thread)
+                    seen_ids.add(thread.id)
         except Exception as e:
-            self.logger.error(f"Error setting auto-archive for thread {thread.id}: {e}")
+            self.logger.error(f"Failed to fetch active threads: {e}")
+
+        return targets
+
+    async def close_stale_command(self, interaction: discord.Interaction):
+        """アーカイブ予定を過ぎた滞留スレッドを一覧表示するコマンドの実装"""
+        if interaction.guild is None:
             await interaction.response.send_message(
-                "スレッドの設定変更中にエラーが発生しました", ephemeral=True
+                "このコマンドはサーバー専用です", ephemeral=True
             )
+            return
+
+        await interaction.response.defer()
+
+        targets = await self._collect_stale_threads(interaction.guild)
+
+        # ターミナルに一覧表示
+        self.logger.info(f"=== close_stale: {len(targets)}件検出 ===")
+        for thread in targets:
+            parent_name = thread.parent.name if thread.parent else "不明"
+            self.logger.info(
+                f"  {thread.name} ({parent_name}) "
+                f"archived={thread.archived} "
+                f"archive_timestamp={thread.archive_timestamp} "
+                f"id={thread.id}"
+            )
+        self.logger.info("=== close_stale: 一覧終了 ===")
+
+        if not targets:
+            await interaction.followup.send("対象のスレッドはありませんでした")
+            return
+
+        ts = self._to_discord_timestamp
+
+        embed = discord.Embed(
+            title="滞留スレッド一覧",
+            color=discord.Color.orange(),
+        )
+
+        lines = []
+        for thread in targets:
+            parent_name = thread.parent.name if thread.parent else "不明"
+            lines.append(
+                f"• **{thread.name}** ({parent_name}) "
+                f"— 期限: {ts(thread.archive_timestamp, 'R')}"
+            )
+
+        description_body = "\n".join(lines)
+        if len(description_body) > 4000:
+            description_body = description_body[:4000] + "\n…（省略）"
+
+        embed.description = f"{len(targets)}件\n\n" + description_body
+
+        await interaction.followup.send(embed=embed)
