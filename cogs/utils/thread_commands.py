@@ -505,3 +505,64 @@ class ThreadCommands:
         ]
 
         await interaction.followup.send("\n".join(info_lines))
+
+    async def close_archived_command(self, interaction: discord.Interaction):
+        """アーカイブ済みで[CLOSED]が付いていないスレッドを一括閉架するコマンドの実装"""
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "このコマンドはサーバー専用です", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer()
+
+        closed_count = 0
+        error_count = 0
+
+        for channel in interaction.guild.channels:
+            if not isinstance(channel, (discord.TextChannel, discord.ForumChannel)):
+                continue
+
+            try:
+                for private in [False, True]:
+                    async for thread in channel.archived_threads(
+                        limit=None, private=private
+                    ):
+                        if self.config.CLOSED_THREAD_PREFIX in thread.name:
+                            continue
+
+                        new_name = (
+                            f"{self.config.CLOSED_THREAD_PREFIX}{thread.name}"
+                        )
+                        if len(new_name) > 100:
+                            max_len = 100 - len(self.config.CLOSED_THREAD_PREFIX)
+                            new_name = (
+                                f"{self.config.CLOSED_THREAD_PREFIX}"
+                                f"{thread.name[:max_len]}"
+                            )
+
+                        try:
+                            await thread.edit(name=new_name, archived=True)
+                            await self.channel_data_manager.set_maintenance_channel(
+                                channel_id=thread.id,
+                                guild_id=interaction.guild.id,
+                                tf=False,
+                            )
+                            closed_count += 1
+                        except Exception as e:
+                            self.logger.error(
+                                f"Error closing archived thread {thread.id}: {e}"
+                            )
+                            error_count += 1
+
+                        await asyncio.sleep(1)
+
+            except discord.Forbidden:
+                self.logger.warning(
+                    f"No permission to access archived threads in {channel.name}"
+                )
+
+        message = f"アーカイブ済みスレッドの閉架が完了しました。\n閉架: {closed_count}件"
+        if error_count > 0:
+            message += f"\nエラー: {error_count}件"
+        await interaction.followup.send(message)

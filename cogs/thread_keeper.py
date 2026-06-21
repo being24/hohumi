@@ -528,6 +528,16 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         await self.thread_commands.thread_info_command(interaction, thread_id)
 
     @app_commands.command(
+        name="close_archived",
+        description="アーカイブ済みで[CLOSED]が付いていないスレッドを一括閉架します",
+    )
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
+    async def close_archived(self, interaction: discord.Interaction):
+        """アーカイブ済みスレッドを一括閉架するコマンド"""
+        await self.thread_commands.close_archived_command(interaction)
+
+    @app_commands.command(
         name="reinvite_notify_roles",
         description="このスレッドの自動参加役職を再招待します",
     )
