@@ -546,13 +546,16 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
 
     @app_commands.command(
         name="close_stale",
-        description="アーカイブ期限を過ぎた滞留スレッドを一括閉架します",
+        description="閉架済みだがアーカイブされていないスレッドを一覧表示します",
     )
+    @app_commands.describe(execute="Trueにすると対象スレッドをアーカイブします")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
-    async def close_stale(self, interaction: discord.Interaction):
-        """滞留スレッドを一括閉架するコマンド"""
-        await self.thread_commands.close_stale_command(interaction)
+    async def close_stale(
+        self, interaction: discord.Interaction, execute: bool = False
+    ):
+        """閉架済み未アーカイブスレッドを一覧表示するコマンド"""
+        await self.thread_commands.close_stale_command(interaction, execute)
 
     @app_commands.command(
         name="reinvite_notify_roles",
