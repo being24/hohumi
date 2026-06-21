@@ -563,12 +563,15 @@ class ThreadCommands:
 
         await interaction.followup.send(embed=embed)
 
-    def _collect_stale_threads(
+    async def _collect_stale_threads(
         self, guild: discord.Guild
     ) -> list[discord.Thread]:
         """未アーカイブだがアーカイブ予定時刻を過ぎているスレッドを収集する"""
         now = discord.utils.utcnow()
         targets = []
+        seen_ids: set[int] = set()
+
+        # キャッシュから
         for thread in guild.threads:
             if thread.archived:
                 continue
@@ -576,10 +579,28 @@ class ThreadCommands:
                 continue
             if thread.archive_timestamp and thread.archive_timestamp < now:
                 targets.append(thread)
+                seen_ids.add(thread.id)
+
+        # APIから全アクティブスレッドを取得（キャッシュにないものを補完）
+        try:
+            all_active = await guild.active_threads()
+            for thread in all_active:
+                if thread.id in seen_ids:
+                    continue
+                if thread.archived:
+                    continue
+                if self.config.CLOSED_THREAD_PREFIX in thread.name:
+                    continue
+                if thread.archive_timestamp and thread.archive_timestamp < now:
+                    targets.append(thread)
+                    seen_ids.add(thread.id)
+        except Exception as e:
+            self.logger.error(f"Failed to fetch active threads: {e}")
+
         return targets
 
     async def close_stale_command(self, interaction: discord.Interaction):
-        """アーカイブ予定を過ぎた未アーカイブスレッドを一括閉架するコマンドの実装"""
+        """アーカイブ予定を過ぎた滞留スレッドを一覧表示するコマンドの実装"""
         if interaction.guild is None:
             await interaction.response.send_message(
                 "このコマンドはサーバー専用です", ephemeral=True
@@ -588,7 +609,7 @@ class ThreadCommands:
 
         await interaction.response.defer()
 
-        targets = self._collect_stale_threads(interaction.guild)
+        targets = await self._collect_stale_threads(interaction.guild)
 
         # ターミナルに一覧表示
         self.logger.info(f"=== close_stale: {len(targets)}件検出 ===")
@@ -596,6 +617,7 @@ class ThreadCommands:
             parent_name = thread.parent.name if thread.parent else "不明"
             self.logger.info(
                 f"  {thread.name} ({parent_name}) "
+                f"archived={thread.archived} "
                 f"archive_timestamp={thread.archive_timestamp} "
                 f"id={thread.id}"
             )
@@ -608,7 +630,7 @@ class ThreadCommands:
         ts = self._to_discord_timestamp
 
         embed = discord.Embed(
-            title="閉架対象の滞留スレッド",
+            title="滞留スレッド一覧",
             color=discord.Color.orange(),
         )
 
@@ -624,55 +646,6 @@ class ThreadCommands:
         if len(description_body) > 4000:
             description_body = description_body[:4000] + "\n…（省略）"
 
-        embed.description = (
-            f"{len(targets)}件のスレッドが見つかりました。閉架しますか？\n\n"
-            + description_body
-        )
+        embed.description = f"{len(targets)}件\n\n" + description_body
 
-        thread_commands = self
-
-        class ConfirmView(discord.ui.View):
-            def __init__(self):
-                super().__init__(timeout=60)
-
-            @discord.ui.button(label="閉架する", style=discord.ButtonStyle.danger)
-            async def confirm(
-                self, button_interaction: discord.Interaction, button: discord.ui.Button
-            ):
-                await button_interaction.response.defer()
-                self.stop()
-
-                closed_count = 0
-                error_count = 0
-
-                for thread in targets:
-                    try:
-                        await thread_commands._execute_thread_close(thread)
-                        closed_count += 1
-                    except Exception as e:
-                        thread_commands.logger.error(
-                            f"Error closing stale thread {thread.id}: {e}"
-                        )
-                        error_count += 1
-
-                    await asyncio.sleep(1)
-
-                result = f"閉架完了: {closed_count}件"
-                if error_count > 0:
-                    result += f"\nエラー: {error_count}件"
-
-                result_embed = discord.Embed(
-                    title="一括閉架完了",
-                    description=result,
-                    color=discord.Color.green(),
-                )
-                await button_interaction.followup.send(embed=result_embed)
-
-            @discord.ui.button(label="キャンセル", style=discord.ButtonStyle.secondary)
-            async def cancel(
-                self, button_interaction: discord.Interaction, button: discord.ui.Button
-            ):
-                self.stop()
-                await button_interaction.response.edit_message(
-                    content="キャンセルしました", embed=None, view=None
-                )
+        await interaction.followup.send(embed=embed)
