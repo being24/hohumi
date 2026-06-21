@@ -14,6 +14,7 @@ from discord.ext import commands, tasks
 from .utils.common import CommonUtil
 from .utils.guild_setting import GuildSettingManager
 from .utils.notify_role import NotifySettingManager
+from .utils.scheduled_closures import ScheduledClosureManager
 from .utils.thread_channels import ChannelDataManager
 from .utils.thread_commands import ThreadCommands
 from .utils.thread_config import AutoArchiveDuration, ThreadKeeperConfig
@@ -41,6 +42,7 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         # スレッド管理とコマンド処理
         self.thread_manager = ThreadManager(bot, self.logger)
         self.thread_commands = ThreadCommands(bot, self.logger)
+        self.scheduled_closure_manager = ScheduledClosureManager()
 
     def _is_valid_thread_channel(self, channel) -> bool:
         """有効なスレッドチャンネルかどうかを確認"""
@@ -60,6 +62,7 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         await self.guild_setting_mng.create_table()
         await self.channel_data_manager.create_table()
         await self.notify_role.create_table()
+        await self.scheduled_closure_manager.create_table()
 
         for guild in self.bot.guilds:
             await self.guild_setting_mng.upsert_guild(guild)
@@ -68,6 +71,9 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
 
         self.watch_dog.stop()
         self.watch_dog.start()
+
+        self.process_scheduled_closures.stop()
+        self.process_scheduled_closures.start()
 
     @commands.Cog.listener()
     async def on_thread_create(self, thread: discord.Thread):
@@ -127,11 +133,19 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
             and message.author != self.bot.user
         ):
             await self.thread_manager.process_closed_thread_reopening(message)
+            await self.scheduled_closure_manager.cancel_closure(
+                thread_id=message.channel.id
+            )
 
         # watch_dogタスクの監視
         if not self.watch_dog.is_running():
             self.logger.warning("watch_dog is not running!")
             self.watch_dog.start()
+
+        # process_scheduled_closuresタスクの監視
+        if not self.process_scheduled_closures.is_running():
+            self.logger.warning("process_scheduled_closures is not running!")
+            self.process_scheduled_closures.start()
 
     @commands.Cog.listener()
     async def on_thread_update(self, before: discord.Thread, after: discord.Thread):
@@ -373,6 +387,49 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         self.logger.error(f"watch_dog error: {error}")
         return
 
+    @tasks.loop(minutes=1.0)
+    async def process_scheduled_closures(self):
+        """定期実行タスク：予約された閉架の実行"""
+        due_closures = await self.scheduled_closure_manager.get_due_closures()
+        if due_closures is None:
+            return
+
+        for closure in due_closures:
+            guild = self.bot.get_guild(closure.guild_id)
+            if guild is None:
+                await self.scheduled_closure_manager.cancel_closure(closure.thread_id)
+                continue
+
+            thread = guild.get_thread(closure.thread_id)
+            if thread is None:
+                self.logger.warning(
+                    f"Scheduled closure: Thread {closure.thread_id} not found in {guild.name}"
+                )
+                await self.scheduled_closure_manager.cancel_closure(closure.thread_id)
+                continue
+
+            if thread.archived or self.config.CLOSED_THREAD_PREFIX in thread.name:
+                await self.scheduled_closure_manager.cancel_closure(closure.thread_id)
+                continue
+
+            success = await self.thread_commands._execute_thread_close(thread)
+            await self.scheduled_closure_manager.cancel_closure(closure.thread_id)
+
+            if success:
+                self.logger.info(
+                    f"Scheduled closure executed for thread {thread.name} in {guild.name}"
+                )
+
+            await asyncio.sleep(self.config.THREAD_PROCESSING_SLEEP_SECONDS)
+
+    @process_scheduled_closures.before_loop
+    async def before_process_scheduled_closures(self):
+        await self.bot.wait_until_ready()
+
+    @process_scheduled_closures.error
+    async def process_scheduled_closures_error(self, error):
+        self.logger.error(f"process_scheduled_closures error: {error}")
+
     # ======== コマンド定義 ========
 
     @app_commands.command(
@@ -449,6 +506,15 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
     ):
         """スレッドを指定時間後に自動閉架するよう設定するコマンド"""
         await self.thread_commands.close_after_command(interaction, duration)
+
+    @app_commands.command(
+        name="cancel_close",
+        description="このスレッドの閉架予約をキャンセルします",
+    )
+    @app_commands.guild_only()
+    async def cancel_close(self, interaction: discord.Interaction):
+        """スレッドの閉架予約をキャンセルするコマンド"""
+        await self.thread_commands.cancel_close_command(interaction)
 
     @app_commands.command(
         name="reinvite_notify_roles",

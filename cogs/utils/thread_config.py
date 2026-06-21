@@ -46,5 +46,6 @@ class ThreadKeeperConfig:
 
     # タスク設定
     WATCH_DOG_INTERVAL_MINUTES = 15  # watch_dogタスクの実行間隔（分）
+    SCHEDULED_CLOSURE_CHECK_INTERVAL_MINUTES = 1  # 閉架予約チェックの実行間隔（分）
     THREAD_PROCESSING_SLEEP_SECONDS = 5  # スレッド処理間の待機時間（秒）
     ARCHIVE_EXTENSION_SLEEP_SECONDS = 10  # アーカイブ延長処理の待機時間（秒）

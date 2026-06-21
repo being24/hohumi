@@ -5,6 +5,7 @@
 import asyncio
 import logging
 import re
+from datetime import datetime, timedelta
 
 import discord
 from discord.ext import commands
@@ -12,6 +13,7 @@ from discord.ext import commands
 from .common import CommonUtil
 from .guild_setting import GuildSettingManager
 from .notify_role import NotifySettingManager
+from .scheduled_closures import ScheduledClosureManager
 from .thread_channels import ChannelDataManager
 from .thread_config import AutoArchiveDuration, ThreadKeeperConfig
 from .thread_management import ThreadManager
@@ -31,6 +33,7 @@ class ThreadCommands:
         self.guild_setting_mng = GuildSettingManager()
         self.notify_setting = NotifySettingManager()
         self.channel_data_manager = ChannelDataManager()
+        self.scheduled_closure_manager = ScheduledClosureManager()
 
     # ======== スレッド管理コマンド ========
 
@@ -342,6 +345,31 @@ class ThreadCommands:
                     await message.edit(content=content)
                 break
 
+    async def _execute_thread_close(self, thread: discord.Thread) -> bool:
+        """スレッドを閉架する共通処理（close_command と定期タスクの両方から利用）"""
+        new_name = f"{self.config.CLOSED_THREAD_PREFIX}{thread.name}"
+
+        if len(new_name) > 100:
+            max_original_length = 100 - len(self.config.CLOSED_THREAD_PREFIX)
+            truncated_name = thread.name[:max_original_length]
+            new_name = f"{self.config.CLOSED_THREAD_PREFIX}{truncated_name}"
+
+        try:
+            await thread.edit(name=new_name, archived=True)
+
+            await self.channel_data_manager.set_maintenance_channel(
+                channel_id=thread.id,
+                guild_id=thread.guild.id,
+                tf=False,
+            )
+            return True
+        except discord.Forbidden:
+            self.logger.error(f"No permission to close thread {thread.id}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error closing thread {thread.id}: {e}")
+            return False
+
     async def close_command(self, interaction: discord.Interaction):
         """スレッドを閉架するコマンドの実装"""
         if not isinstance(interaction.channel, discord.Thread):
@@ -351,37 +379,13 @@ class ThreadCommands:
             return
 
         thread = interaction.channel
-        new_name = f"{self.config.CLOSED_THREAD_PREFIX}{thread.name}"
 
-        # 名前の長さ制限をチェック（Discordの制限は100文字）
-        if len(new_name) > 100:
-            # 元の名前を切り詰める
-            max_original_length = 100 - len(self.config.CLOSED_THREAD_PREFIX)
-            truncated_name = thread.name[:max_original_length]
-            new_name = f"{self.config.CLOSED_THREAD_PREFIX}{truncated_name}"
+        # 閉架予約があればキャンセル
+        await self.scheduled_closure_manager.cancel_closure(thread_id=thread.id)
 
-        try:
-            await interaction.response.send_message("スレッドを閉架します...")
-            await asyncio.sleep(1)  # 少し待機してから閉架処理を行う
-            await thread.edit(name=new_name, archived=True)
-
-            # DB上の保守対象からも除外
-            if interaction.guild is not None:
-                await self.channel_data_manager.set_maintenance_channel(
-                    channel_id=thread.id,
-                    guild_id=interaction.guild.id,
-                    tf=False,
-                )
-
-        except discord.Forbidden:
-            await interaction.response.send_message(
-                "スレッドを閉架する権限がありません", ephemeral=True
-            )
-        except Exception as e:
-            self.logger.error(f"Error closing thread {thread.id}: {e}")
-            await interaction.response.send_message(
-                "スレッドの閉架中にエラーが発生しました", ephemeral=True
-            )
+        await interaction.response.send_message("スレッドを閉架します...")
+        await asyncio.sleep(1)
+        await self._execute_thread_close(thread)
 
     async def close_after_command(
         self, interaction: discord.Interaction, duration: AutoArchiveDuration
@@ -393,35 +397,41 @@ class ThreadCommands:
             )
             return
 
+        if interaction.guild is None:
+            self.logger.warning("guild is None @close_after_command")
+            return
+
         thread = interaction.channel
         duration_display = AutoArchiveDuration.get_display_name(duration)
-        new_name = f"{self.config.CLOSED_THREAD_PREFIX}{thread.name}"
-        if len(new_name) > 100:
-            # 元の名前を切り詰める
-            max_original_length = 100 - len(self.config.CLOSED_THREAD_PREFIX)
-            truncated_name = thread.name[:max_original_length]
-            new_name = f"{self.config.CLOSED_THREAD_PREFIX}{truncated_name}"
+        scheduled_close_time = datetime.now() + timedelta(minutes=duration.value)
 
-        try:
-            await thread.edit(name=new_name, auto_archive_duration=duration.value)
+        await self.scheduled_closure_manager.schedule_closure(
+            thread_id=thread.id,
+            guild_id=interaction.guild.id,
+            scheduled_close_time=scheduled_close_time,
+            created_by=interaction.user.id,
+        )
 
-            # DB上の保守対象からも除外
-            if interaction.guild is not None:
-                await self.channel_data_manager.set_maintenance_channel(
-                    channel_id=thread.id,
-                    guild_id=interaction.guild.id,
-                    tf=False,
-                )
+        formatted_time = scheduled_close_time.strftime("%Y/%m/%d %H:%M")
+        await interaction.response.send_message(
+            f"このスレッドは{duration_display}後（{formatted_time}）に閉架予定です"
+        )
 
+    async def cancel_close_command(self, interaction: discord.Interaction):
+        """閉架予約をキャンセルするコマンドの実装"""
+        if not isinstance(interaction.channel, discord.Thread):
             await interaction.response.send_message(
-                f"スレッドが{duration_display}後に自動的に閉架されるように設定しました"
+                "このコマンドはスレッドチャンネル専用です", ephemeral=True
             )
-        except discord.Forbidden:
+            return
+
+        cancelled = await self.scheduled_closure_manager.cancel_closure(
+            thread_id=interaction.channel.id
+        )
+
+        if cancelled:
+            await interaction.response.send_message("閉架予約をキャンセルしました")
+        else:
             await interaction.response.send_message(
-                "スレッドの設定を変更する権限がありません", ephemeral=True
-            )
-        except Exception as e:
-            self.logger.error(f"Error setting auto-archive for thread {thread.id}: {e}")
-            await interaction.response.send_message(
-                "スレッドの設定変更中にエラーが発生しました", ephemeral=True
+                "このスレッドには閉架予約がありません", ephemeral=True
             )
