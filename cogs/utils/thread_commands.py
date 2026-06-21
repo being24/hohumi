@@ -588,7 +588,9 @@ class ThreadCommands:
 
         return targets
 
-    async def close_stale_command(self, interaction: discord.Interaction):
+    async def close_stale_command(
+        self, interaction: discord.Interaction, execute: bool = False
+    ):
         """閉架済みだがアーカイブされていないスレッドを一覧表示するコマンドの実装"""
         if interaction.guild is None:
             await interaction.response.send_message(
@@ -631,3 +633,21 @@ class ThreadCommands:
         embed.description = f"{len(targets)}件\n\n" + description_body
 
         await interaction.followup.send(embed=embed)
+
+        if not execute:
+            return
+
+        success = 0
+        failed = 0
+        for thread in targets:
+            try:
+                await thread.edit(archived=True)
+                success += 1
+            except Exception as e:
+                self.logger.error(f"Failed to archive thread {thread.id}: {e}")
+                failed += 1
+
+        result_parts = [f"{success}件をアーカイブしました"]
+        if failed:
+            result_parts.append(f"（{failed}件失敗）")
+        await interaction.followup.send("".join(result_parts))
