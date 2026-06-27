@@ -412,9 +412,9 @@ class ThreadCommands:
             created_by=interaction.user.id,
         )
 
-        formatted_time = scheduled_close_time.strftime("%Y/%m/%d %H:%M")
+        ts = self._to_discord_timestamp(scheduled_close_time)
         await interaction.response.send_message(
-            f"このスレッドは{duration_display}後（{formatted_time}）に閉架予定です"
+            f"このスレッドは{duration_display}後（{ts}）に閉架予定です"
         )
 
     async def cancel_close_command(self, interaction: discord.Interaction):
