@@ -108,13 +108,25 @@ class ThreadManager:
         else:
             return
 
-        try:
-            msg = await thread.send(content)
-            await asyncio.sleep(1)
-
-            await msg.edit(content=f"{role_mentions} {content}")
-        except discord.Forbidden:
-            self.logger.error(f"Cannot add staff to thread {thread.id}")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                msg = await thread.send(content)
+                await asyncio.sleep(1)
+                await msg.edit(content=f"{role_mentions} {content}")
+                return
+            except discord.Forbidden:
+                if attempt < max_retries - 1:
+                    self.logger.warning(
+                        f"Forbidden adding staff to thread {thread.id}, "
+                        f"retrying ({attempt + 1}/{max_retries})"
+                    )
+                    await asyncio.sleep(2 * (attempt + 1))
+                else:
+                    self.logger.error(
+                        f"Cannot add staff to thread {thread.id} "
+                        f"after {max_retries} retries"
+                    )
 
     def return_estimated_archive_time(self, thread: discord.Thread) -> datetime:
         """スレッドの推定アーカイブ時間を計算"""
