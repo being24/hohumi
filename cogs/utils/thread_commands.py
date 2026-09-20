@@ -324,25 +324,13 @@ class ThreadCommands:
                 except Exception as e:
                     self.logger.error(f"メッセージ編集失敗: {e}")
 
-                # DBからメンション対象のロールを取得
-                role_ids = await self.notify_setting.return_notified(thread.guild.id)
-
-                role_mentions = []
-                if role_ids is None:
+                if not await self.thread_manager.invite_notify_roles(
+                    thread, content_wo_mentions, message
+                ):
                     self.logger.warning(
                         f"スレッド{thread.name}の通知ロールが設定されていません"
                     )
                     return
-                else:
-                    for role_id in role_ids:
-                        role = thread.guild.get_role(role_id)
-                        if role is not None:
-                            role_mentions.append(role.mention)
-
-                if role_mentions:
-                    # roleのメンションにcontent_wo_mentionsを足して送る
-                    content = f"{' '.join(role_mentions)} {content_wo_mentions}"
-                    await message.edit(content=content)
                 break
 
     async def _execute_thread_close(self, thread: discord.Thread) -> bool:

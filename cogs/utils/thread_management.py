@@ -14,6 +14,31 @@ from .thread_channels import ChannelDataManager
 from .reminder_exclusions import ReminderExclusionManager
 
 
+DISCORD_MESSAGE_LIMIT = 2000
+
+
+def _build_mention_batches(mentions: list[str], content: str) -> list[str]:
+    """メンションをDiscordの文字数上限内に分割する。"""
+    batches: list[str] = []
+    batch: list[str] = []
+    batch_length = 0
+    max_mentions_length = DISCORD_MESSAGE_LIMIT - len(content) - 1
+
+    for mention in mentions:
+        added_length = len(mention) + (1 if batch else 0)
+        if batch and batch_length + added_length > max_mentions_length:
+            batches.append(f"{' '.join(batch)} {content}")
+            batch = []
+            batch_length = 0
+            added_length = len(mention)
+        batch.append(mention)
+        batch_length += added_length
+
+    if batch:
+        batches.append(f"{' '.join(batch)} {content}")
+    return batches
+
+
 class ThreadManager:
     """スレッド管理機能を提供するクラス"""
 
@@ -49,19 +74,56 @@ class ThreadManager:
 
         return False
 
-    async def _build_role_mentions(self, guild: discord.Guild) -> str:
-        """ロールメンション文字列を構築"""
+    async def _get_notify_mentions(
+        self, guild: discord.Guild
+    ) -> tuple[list[str], list[str]]:
+        """通知対象のロールと、その所属メンバーのメンションを返す。"""
         role_ids = await self.notify_role.return_notified(guild.id)
         if role_ids is None:
-            return ""
+            return [], []
 
-        mentions = []
+        roles = []
         for role_id in role_ids:
             role = guild.get_role(role_id)
             if role is not None:
-                mentions.append(role.mention)
+                roles.append(role)
 
-        return " ".join(mentions)
+        member_mentions = []
+        seen_member_ids = set()
+        for role in roles:
+            for member in role.members:
+                if member.id not in seen_member_ids:
+                    seen_member_ids.add(member.id)
+                    member_mentions.append(member.mention)
+
+        return [role.mention for role in roles], member_mentions
+
+    async def invite_notify_roles(
+        self,
+        thread: discord.Thread,
+        content: str,
+        message: discord.Message | None = None,
+    ) -> bool:
+        """ロールをメンバーへ展開して招待し、表示をロールへ戻す。"""
+        role_mentions, member_mentions = await self._get_notify_mentions(thread.guild)
+        if not role_mentions:
+            return False
+
+        if message is None:
+            message = await thread.send(content)
+
+        for batch in _build_mention_batches(member_mentions, content):
+            await message.edit(
+                content=batch,
+                allowed_mentions=discord.AllowedMentions(users=True, roles=False),
+            )
+            await asyncio.sleep(1)
+
+        await message.edit(
+            content=f"{' '.join(role_mentions)} {content}",
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        return True
 
     async def _handle_maintenance_error(self, thread: discord.Thread, operation: str):
         """保守エラー時の共通処理"""
@@ -96,10 +158,6 @@ class ThreadManager:
 
     async def add_staff_to_thread(self, thread: discord.Thread):
         """スレッドにスタッフロールを追加する"""
-        role_mentions = await self._build_role_mentions(thread.guild)
-        if not role_mentions:
-            return
-
         # メッセージ内容を決定
         if isinstance(thread.parent, discord.TextChannel):
             content = "スレッドが作成されました"
@@ -111,9 +169,7 @@ class ThreadManager:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                msg = await thread.send(content)
-                await asyncio.sleep(1)
-                await msg.edit(content=f"{role_mentions} {content}")
+                await self.invite_notify_roles(thread, content)
                 return
             except discord.Forbidden:
                 if attempt < max_retries - 1:
@@ -247,11 +303,6 @@ class ThreadManager:
             self.logger.warning("guild is None @read_staff_to_thread")
             return
 
-        role_mentions = await self._build_role_mentions(guild)
-        if not role_mentions:
-            self.logger.info("No roles configured for staff addition")
-            return
-
         for thread in threads:
             try:
                 # メッセージ内容を決定
@@ -262,10 +313,9 @@ class ThreadManager:
                 else:
                     continue
 
-                msg = await thread.send(content)
-                await asyncio.sleep(1)
-
-                await msg.edit(content=f"{role_mentions} {content}")
+                if not await self.invite_notify_roles(thread, content):
+                    self.logger.info("No roles configured for staff addition")
+                    return
                 await asyncio.sleep(1)
 
             except discord.Forbidden:
