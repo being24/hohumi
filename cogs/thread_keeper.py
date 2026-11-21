@@ -312,9 +312,9 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         # Unicode絵文字
         text = re.sub(
             r"[\U0001F000-\U0001FFFF"
-            r"☀-➿"
-            r"︀-️"
-            r"‍]+",
+            r"←-⇿⌀-⏿☀-➿⬀-⯿"
+            r"©®‼⁉™ℹ〰〽㊗㊙"
+            r"⃣︀-️‍]+",
             "",
             text,
         )
@@ -329,7 +329,8 @@ class ThreadKeeper(commands.Cog, name="Thread管理用cog"):
         """アーカイブ通知メッセージを構築"""
         action = "閉架" if is_archived else "閉架が解除"
 
-        clean_name = self._strip_emojis(thread_name)
+        # 絵文字のみの名前だと[](url)になりリンクにならない
+        clean_name = self._strip_emojis(thread_name) or "スレッド"
         thread_link = f"[{clean_name}]({thread_url})"
 
         return f"{thread_link}は{action}されました。"
